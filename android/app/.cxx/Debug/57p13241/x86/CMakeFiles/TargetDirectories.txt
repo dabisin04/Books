@@ -1,0 +1,2 @@
+C:/Users/saedc/Downloads/Books/android/app/.cxx/Debug/57p13241/x86/CMakeFiles/edit_cache.dir
+C:/Users/saedc/Downloads/Books/android/app/.cxx/Debug/57p13241/x86/CMakeFiles/rebuild_cache.dir
