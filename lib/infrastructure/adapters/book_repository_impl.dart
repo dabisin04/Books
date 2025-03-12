@@ -18,17 +18,27 @@ class BookRepositoryImpl implements BookRepository {
   @override
   Future<void> addBook(Book book) async {
     final db = await _database;
+
+    // Asegurar que el libro tenga un ID único
     final String bookId = book.id.isEmpty ? const Uuid().v4() : book.id;
+
+    // Asegurar que el libro tenga un autor válido
+    if (book.authorId == null || book.authorId!.isEmpty) {
+      throw Exception("Error: El libro debe tener un authorId válido.");
+    }
+
     final newBook = book.copyWith(
       id: bookId,
       views: book.views ?? 0,
       content: book.content ?? '',
     );
+
     await db.insert(
       'books',
       newBook.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
     await _cacheBooks();
   }
 
@@ -169,14 +179,20 @@ class BookRepositoryImpl implements BookRepository {
     await _cacheBooks();
   }
 
+  @override
   Future<void> updateBookDetails(String bookId,
-      {String? title, List<String>? additionalGenres, String? genre}) async {
+      {String? title,
+      String? description,
+      List<String>? additionalGenres,
+      String? genre}) async {
     final db = await _database;
     final values = <String, dynamic>{};
 
     if (title != null) values['title'] = title;
-    if (additionalGenres != null)
+    if (description != null) values['description'] = description; // Agregado
+    if (additionalGenres != null) {
       values['additional_genres'] = jsonEncode(additionalGenres);
+    }
     if (genre != null) values['genre'] = genre;
 
     if (values.isNotEmpty) {

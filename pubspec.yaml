@@ -17,6 +17,8 @@ dependencies:
   flutter_bloc: ^9.1.0
   uuid: ^4.5.1
   shared_preferences: ^2.3.3
+  flutter_quill: ^11.1.0
+  flutter_quill_extensions: ^11.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,32 +1,58 @@
+import 'dart:convert';
+import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
 
 class WriteBookContentScreen extends StatefulWidget {
   final Book book;
-  const WriteBookContentScreen({Key? key, required this.book})
-      : super(key: key);
+
+  const WriteBookContentScreen({super.key, required this.book});
 
   @override
   _WriteBookContentScreenState createState() => _WriteBookContentScreenState();
 }
 
 class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
-  final TextEditingController _contentController = TextEditingController();
+  late final quill.QuillController _controller;
+  final ScrollController _editorScrollController = ScrollController();
+  final FocusNode _editorFocusNode = FocusNode();
   DateTime? _selectedPublicationDate;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedPublicationDate = widget.book.publicationDate;
+    if (widget.book.content != null && widget.book.content!.isNotEmpty) {
+      try {
+        final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));
+        _controller = quill.QuillController(
+          document: doc,
+          selection: const TextSelection.collapsed(offset: 0),
+        );
+      } catch (e) {
+        _controller = quill.QuillController.basic();
+      }
+    } else {
+      _controller = quill.QuillController.basic();
+    }
+  }
+
+  @override
   void dispose() {
-    _contentController.dispose();
+    _controller.dispose();
+    _editorScrollController.dispose();
+    _editorFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _pickPublicationDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _selectedPublicationDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
@@ -38,72 +64,66 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   }
 
   Future<void> _finishBookCreation() async {
-    // Actualizamos el libro con el contenido y la fecha de publicación.
-    final String content = _contentController.text.trim();
-    final String? pubDateStr = _selectedPublicationDate?.toIso8601String();
-
-    // Enviar eventos al Bloc para actualizar el contenido y la fecha de publicación
-    context.read<BookBloc>().add(UpdateBookContent(widget.book.id, content));
-    if (pubDateStr != null) {
-      context
-          .read<BookBloc>()
-          .add(UpdateBookPublicationDate(widget.book.id, pubDateStr));
+    final String contentJson =
+        jsonEncode(_controller.document.toDelta().toJson());
+    final updatedBook = widget.book.copyWith(
+      content: contentJson,
+      publicationDate: _selectedPublicationDate,
+    );
+    context
+        .read<BookBloc>()
+        .add(UpdateBookContent(updatedBook.id, contentJson));
+    if (_selectedPublicationDate != null) {
+      context.read<BookBloc>().add(
+            UpdateBookPublicationDate(
+              updatedBook.id,
+              _selectedPublicationDate!.toIso8601String(),
+            ),
+          );
     }
-
-    // Simulamos un retardo (por ejemplo, para mostrar una pantalla de carga)
-    await Future.delayed(const Duration(seconds: 2));
-
+    await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-    // Mostramos un diálogo de confirmación y luego volvemos a la pantalla anterior.
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Libro actualizado"),
-        content: const Text("Se han guardado los cambios."),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Cierra el diálogo.
-              Navigator.pop(context); // Vuelve a la pantalla anterior.
-            },
-            child: const Text("OK"),
-          )
-        ],
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Libro actualizado correctamente"),
+        duration: Duration(seconds: 2),
       ),
     );
+    Navigator.pop(context, updatedBook);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Escribir Contenido"),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(
-              "Título: ${widget.book.title}",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text("Género: ${widget.book.genre}"),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _contentController,
-              decoration: const InputDecoration(
-                labelText: "Contenido del libro",
-                border: OutlineInputBorder(),
+      appBar: AppBar(title: const Text("Editor de Contenido")),
+      body: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: quill.QuillEditor(
+                  controller: _controller,
+                  scrollController: _editorScrollController,
+                  focusNode: _editorFocusNode,
+                ),
               ),
-              maxLines: 8,
             ),
-            const SizedBox(height: 16),
-            Row(
+          ),
+          // Use the custom compact toolbar as a bottom toolbar.
+          CompactQuillToolbar(controller: _controller),
+          // Publication date selector.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+            child: Row(
               children: [
                 ElevatedButton(
                   onPressed: _pickPublicationDate,
-                  child: const Text("Seleccionar fecha de publicación"),
+                  child: const Text("Fecha de publicación"),
                 ),
                 const SizedBox(width: 16),
                 Text(
@@ -113,13 +133,17 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
+          ),
+          // Save button.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+            child: ElevatedButton(
               onPressed: _finishBookCreation,
-              child: const Text("Finalizar"),
+              child: const Text("Guardar"),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

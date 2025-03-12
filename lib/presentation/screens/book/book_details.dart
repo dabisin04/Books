@@ -1,7 +1,15 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:books/presentation/widgets/global/custom_button.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
+import 'package:books/presentation/screens/book/write_book_content.dart';
+import 'package:books/presentation/screens/book/write_book.dart';
+import 'package:books/presentation/widgets/global/custom_button.dart';
+import '../../../application/bloc/book/book_bloc.dart';
+import '../../../application/bloc/book/book_event.dart';
+import '../../../application/bloc/book/book_state.dart';
+import '../../../application/bloc/user/user_bloc.dart';
+import '../../../application/bloc/user/user_state.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   final Book book;
@@ -15,6 +23,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   bool _descriptionExpanded = false;
   bool _showFullComments = false;
   final ScrollController _scrollController = ScrollController();
+  String? _authorName;
 
   // Genera un degradado aleatorio para el banner
   LinearGradient _generateRandomGradient() {
@@ -25,15 +34,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
           random.nextInt(256),
           random.nextInt(256),
         );
-    final color1 = randomColor();
-    final color2 = randomColor();
-    final begin =
-        Alignment(random.nextDouble() * 2 - 1, random.nextDouble() * 2 - 1);
-    final end = Alignment(-begin.x, -begin.y);
     return LinearGradient(
-      begin: begin,
-      end: end,
-      colors: [color1, color2],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [randomColor(), randomColor()],
     );
   }
 
@@ -59,25 +63,29 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   void _showOptions() {
+    // Se determina si el usuario actual es el autor
+    final isAuthor = context.read<UserBloc>().state is UserAuthenticated &&
+        (context.read<UserBloc>().state as UserAuthenticated).user.id ==
+            widget.book.authorId;
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.thumb_down),
-              title: const Text('No me interesa'),
-              onTap: () {
-                Navigator.pop(context);
-                // Lógica para "no me interesa"
-              },
-            ),
+            // Si no es el autor, se muestra "No me interesa"
+            if (!isAuthor)
+              ListTile(
+                leading: const Icon(Icons.thumb_down),
+                title: const Text('No me interesa'),
+                onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.report),
               title: const Text('Reportar'),
               onTap: () {
                 Navigator.pop(context);
-                // Lógica para reportar
               },
             ),
           ],
@@ -86,9 +94,57 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
   }
 
+  Future<void> _fetchAuthorName() async {
+    print(
+        "Autor ID recibido: ${widget.book.authorId}"); // Verifica el ID recibido
+
+    final userState = context.read<UserBloc>().state;
+
+    if (userState is UserAuthenticated) {
+      final user = userState.user;
+      if (user.id == widget.book.authorId) {
+        setState(() {
+          _authorName = user.username; // Usamos username en lugar de name
+        });
+        return;
+      }
+    }
+
+    // Si no está en el estado del Bloc, se podría realizar otra consulta.
+    await Future.delayed(const Duration(milliseconds: 500));
+    setState(() {
+      _authorName = "Desconocido";
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAuthorName();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Se obtiene el estado del usuario para determinar si es el autor del libro
+    final userState = context.watch<UserBloc>().state;
+    final isAuthor = userState is UserAuthenticated &&
+        userState.user.id == widget.book.authorId;
+
     return Scaffold(
+      floatingActionButton: isAuthor
+          ? FloatingActionButton(
+              onPressed: () {
+                // Si es el autor, permite editar: navega a la pantalla de escribir libro
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WriteBookScreen(book: widget.book),
+                  ),
+                );
+              },
+              child: const Icon(Icons.edit),
+            )
+          : null,
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
@@ -130,7 +186,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Autor: ${widget.book.authorId}",
+                          "Autor: ${_authorName ?? 'Cargando...'}",
                           style: const TextStyle(
                               fontSize: 16, color: Colors.white70),
                         ),

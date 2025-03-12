@@ -6,6 +6,8 @@ import 'package:books/presentation/screens/auth/register.dart';
 import 'package:books/presentation/screens/user/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'domain/entities/book/book.dart';
 import 'domain/theme/app_theme.dart';
 import 'application/bloc/book/book_bloc.dart';
@@ -50,7 +52,7 @@ class MyApp extends StatelessWidget {
           create: (_) => UserBloc(userRepository: userRepository),
         ),
         BlocProvider<BookBloc>(
-          create: (_) => BookBloc(bookRepository),
+          create: (_) => BookBloc(bookRepository, userRepository),
         ),
       ],
       child: MaterialApp(
@@ -58,6 +60,18 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
+        // Agrega los delegates de localización
+        localizationsDelegates: const [
+          quill.FlutterQuillLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        // Define los locales soportados
+        supportedLocales: const [
+          Locale('en'),
+          Locale('es'),
+        ],
         initialRoute: '/splash',
         routes: {
           '/splash': (context) => const SplashScreen(),

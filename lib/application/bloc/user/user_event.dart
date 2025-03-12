@@ -41,3 +41,5 @@ class RegisterUser extends UserEvent {
   @override
   List<Object?> get props => [username, email, password];
 }
+
+class CheckUserSession extends UserEvent {}

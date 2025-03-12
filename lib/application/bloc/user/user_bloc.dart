@@ -13,6 +13,7 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     on<LogoutUser>(_onLogoutUser);
     on<LoadUserData>(_onLoadUserData);
     on<RegisterUser>(_onRegisterUser);
+    on<CheckUserSession>(_onCheckUserSession);
   }
 
   Future<void> _onLoginUser(LoginUser event, Emitter<UserState> emit) async {
@@ -34,7 +35,7 @@ class UserBloc extends Bloc<UserEvent, UserState> {
       await userRepository.logout();
       emit(UserUnauthenticated());
     } catch (e) {
-      emit(UserError(message: "Error al cerrar sesión"));
+      emit(const UserError(message: "Error al cerrar sesión"));
     }
   }
 
@@ -42,9 +43,9 @@ class UserBloc extends Bloc<UserEvent, UserState> {
       LoadUserData event, Emitter<UserState> emit) async {
     emit(UserLoading());
     try {
-      final users = await userRepository.searchUsers(event.userId);
-      if (users.isNotEmpty) {
-        emit(UserAuthenticated(user: users.first));
+      final user = await userRepository.getUserById(event.userId);
+      if (user != null) {
+        emit(UserAuthenticated(user: user));
       } else {
         emit(const UserError(message: "Usuario no encontrado"));
       }
@@ -57,7 +58,7 @@ class UserBloc extends Bloc<UserEvent, UserState> {
       RegisterUser event, Emitter<UserState> emit) async {
     emit(UserLoading());
     try {
-      final String userId = Uuid().v4();
+      final String userId = const Uuid().v4();
       final user = User(
         id: userId,
         username: event.username,
@@ -69,14 +70,28 @@ class UserBloc extends Bloc<UserEvent, UserState> {
 
       await userRepository.registerUser(user);
 
-      // Agregar login automático
       final loggedUser =
           await userRepository.loginUser(event.email, event.password);
       if (loggedUser != null) {
         emit(UserAuthenticated(user: loggedUser));
       } else {
-        emit(
-            UserError(message: "Error al iniciar sesión después del registro"));
+        emit(const UserError(
+            message: "Error al iniciar sesión después del registro"));
+      }
+    } catch (e) {
+      emit(UserError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onCheckUserSession(
+      CheckUserSession event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    try {
+      final user = await userRepository.getUserSession();
+      if (user != null) {
+        emit(UserAuthenticated(user: user));
+      } else {
+        emit(UserUnauthenticated());
       }
     } catch (e) {
       emit(UserError(message: e.toString()));

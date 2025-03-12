@@ -93,9 +93,19 @@ class UpdateBookPublicationDate extends BookEvent {
 class UpdateBookDetails extends BookEvent {
   final String bookId;
   final String? title;
-  final List<String>? additionalGenres;
+  final String? description;
   final String? genre;
+  final List<String>? additionalGenres;
 
-  UpdateBookDetails(
-      {required this.bookId, this.title, this.additionalGenres, this.genre});
+  const UpdateBookDetails({
+    required this.bookId,
+    this.title,
+    this.description,
+    this.genre,
+    this.additionalGenres,
+  });
+
+  @override
+  List<Object?> get props =>
+      [bookId, title, description, genre, additionalGenres];
 }

@@ -25,8 +25,9 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -38,11 +39,10 @@ class DatabaseHelper {
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        salt TEXT NOT NULL,  -- Agregado para almacenar el salt
+        salt TEXT NOT NULL,  
         bio TEXT,
         is_admin INTEGER DEFAULT 0
-      );
-
+      )
     ''');
 
     // Tabla de Libros
@@ -55,6 +55,7 @@ class DatabaseHelper {
         genre TEXT NOT NULL,
         additional_genres TEXT,
         upload_date TEXT NOT NULL,
+        publication_date TEXT,
         views INTEGER DEFAULT 0,
         rating REAL DEFAULT 0,
         ratings_count INTEGER DEFAULT 0,
@@ -151,5 +152,13 @@ class DatabaseHelper {
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     )
     ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Agrega la columna publication_date a la tabla books
+      await db.execute('ALTER TABLE books ADD COLUMN publication_date TEXT');
+    }
+    // Puedes añadir más migraciones aquí para versiones futuras
   }
 }

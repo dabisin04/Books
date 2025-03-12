@@ -29,3 +29,21 @@ class BookError extends BookState {
   @override
   List<Object?> get props => [message];
 }
+
+class BookAdded extends BookState {
+  final Book book;
+
+  const BookAdded(this.book);
+
+  @override
+  List<Object?> get props => [book];
+}
+
+class BookUpdated extends BookState {
+  final Book book;
+
+  const BookUpdated(this.book);
+
+  @override
+  List<Object?> get props => [book];
+}

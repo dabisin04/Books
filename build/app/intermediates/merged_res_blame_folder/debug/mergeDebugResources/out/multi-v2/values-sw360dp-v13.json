@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.books.app-mergeDebugResources-39:/values-sw360dp-v13/values-sw360dp-v13.xml",
+            "outputFile": "com.example.books.app-mergeDebugResources-41:/values-sw360dp-v13/values-sw360dp-v13.xml",
             "map": [
                 {
                     "source": "C:\\Users\\saedc\\.gradle\\caches\\8.10.2\\transforms\\0098a6e93522fecc805d8900172003dc\\transformed\\preference-1.2.1\\res\\values-sw360dp-v13\\values-sw360dp-v13.xml",

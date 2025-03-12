@@ -1,3 +1,4 @@
+import 'package:books/domain/ports/user/user_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import '../../../domain/ports/book/book_repository.dart';
@@ -6,8 +7,9 @@ import 'book_state.dart';
 
 class BookBloc extends Bloc<BookEvent, BookState> {
   final BookRepository bookRepository;
+  final UserRepository userRepository;
 
-  BookBloc(this.bookRepository) : super(BookInitial()) {
+  BookBloc(this.bookRepository, this.userRepository) : super(BookInitial()) {
     on<LoadBooks>(_onLoadBooks);
     on<AddBook>(_onAddBook);
     on<DeleteBook>(_onDeleteBook);
@@ -35,10 +37,20 @@ class BookBloc extends Bloc<BookEvent, BookState> {
 
   Future<void> _onAddBook(AddBook event, Emitter<BookState> emit) async {
     try {
-      await bookRepository.addBook(event.book);
+      final userId = await userRepository.getCurrentUserId();
+      if (userId == null) {
+        emit(const BookError("Error: Usuario no autenticado"));
+        return;
+      }
+
+      final newBook = event.book.copyWith(authorId: userId);
+
+      await bookRepository.addBook(newBook);
+      emit(BookAdded(newBook));
+
       final updatedBooks = state is BookLoaded
-          ? [...(state as BookLoaded).books, event.book]
-          : [event.book];
+          ? [...(state as BookLoaded).books, newBook]
+          : [newBook];
 
       emit(BookLoaded(updatedBooks));
     } catch (e, stackTrace) {
@@ -177,6 +189,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
       await bookRepository.updateBookDetails(
         event.bookId,
         title: event.title,
+        description: event.description, // Agregado
         additionalGenres: event.additionalGenres,
         genre: event.genre,
       );
@@ -185,6 +198,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
         return book.id == event.bookId
             ? book.copyWith(
                 title: event.title ?? book.title,
+                description: event.description ?? book.description,
                 additionalGenres:
                     event.additionalGenres ?? book.additionalGenres,
                 genre: event.genre ?? book.genre,
@@ -192,7 +206,11 @@ class BookBloc extends Bloc<BookEvent, BookState> {
             : book;
       }).toList();
 
+      final updatedBook =
+          updatedBooks.firstWhere((book) => book.id == event.bookId);
+
       emit(BookLoaded(updatedBooks));
+      emit(BookUpdated(updatedBook)); // Emitimos el libro modificado
     } catch (e, stackTrace) {
       debugPrint('Error en _onUpdateBookDetails: $e\n$stackTrace');
       emit(const BookError("Error al actualizar detalles del libro"));

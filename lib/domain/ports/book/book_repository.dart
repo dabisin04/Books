@@ -14,5 +14,8 @@ abstract class BookRepository {
   Future<void> updateBookPublicationDate(
       String bookId, String? publicationDate);
   Future<void> updateBookDetails(String bookId,
-      {String? title, List<String>? additionalGenres, String? genre});
+      {String? title,
+      List<String>? additionalGenres,
+      String? genre,
+      String? description});
 }

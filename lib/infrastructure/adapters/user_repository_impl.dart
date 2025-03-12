@@ -2,11 +2,9 @@ import 'dart:convert';
 import 'dart:math';
 // ignore: depend_on_referenced_packages
 import 'package:crypto/crypto.dart';
-import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../domain/entities/user/user.dart';
 import '../../domain/ports/user/user_repository.dart';
-import '../../main.dart';
 import '../database/database_helper.dart';
 import '../utils/shared_prefs_helper.dart';
 
@@ -48,19 +46,11 @@ class UserRepositoryImpl implements UserRepository {
     final result =
         await db.query('users', where: 'email = ?', whereArgs: [email]);
 
-    // Muestra el resultado de la consulta en un SnackBar
-    scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text("Resultado de consulta para $email: $result")));
-
     if (result.isNotEmpty) {
       final userData = result.first;
       final storedSalt = userData['salt']?.toString() ?? '';
       final storedHash = userData['password']?.toString() ?? '';
       final inputHash = _hashPassword(password, storedSalt);
-
-      // Muestra el hash almacenado y el hash de entrada en un SnackBar
-      scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
-          content: Text("StoredHash: $storedHash - InputHash: $inputHash")));
 
       if (storedHash == inputHash) {
         final user = User.fromMap(userData);
@@ -71,6 +61,7 @@ class UserRepositoryImpl implements UserRepository {
     return null;
   }
 
+  @override
   Future<User?> getUserById(String userId) async {
     final db = await _database;
     final result =
@@ -159,6 +150,7 @@ class UserRepositoryImpl implements UserRepository {
     await sharedPrefs.clear();
   }
 
+  @override
   Future<User?> getUserSession() async {
     final id = sharedPrefs.getValue<String>("user_id");
     final username = sharedPrefs.getValue<String>("username");
@@ -174,6 +166,17 @@ class UserRepositoryImpl implements UserRepository {
           isAdmin: false);
     }
     return null;
+  }
+
+  @override
+  Future<bool> isUserLoggedIn() async {
+    final id = sharedPrefs.getValue<String>("user_id");
+    return id != null;
+  }
+
+  @override
+  Future<String?> getCurrentUserId() async {
+    return sharedPrefs.getValue<String>("user_id");
   }
 
   String _generateSalt() {
