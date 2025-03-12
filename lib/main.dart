@@ -1,15 +1,20 @@
+import 'package:books/presentation/screens/book/book_details.dart';
 import 'package:books/presentation/screens/home.dart';
 import 'package:books/presentation/screens/splash_screen.dart';
 import 'package:books/presentation/screens/auth/login.dart';
 import 'package:books/presentation/screens/auth/register.dart';
+import 'package:books/presentation/screens/user/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'domain/entities/book/book.dart';
 import 'domain/theme/app_theme.dart';
 import 'application/bloc/book/book_bloc.dart';
 import 'application/bloc/user/user_bloc.dart';
 import 'infrastructure/adapters/book_repository_impl.dart';
 import 'infrastructure/adapters/user_repository_impl.dart';
 import 'infrastructure/utils/shared_prefs_helper.dart';
+import 'presentation/screens/book/write_book.dart';
+import 'presentation/screens/book/write_book_content.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -32,10 +37,10 @@ class MyApp extends StatelessWidget {
   final BookRepositoryImpl bookRepository;
 
   const MyApp({
-    Key? key,
+    super.key,
     required this.userRepository,
     required this.bookRepository,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +64,16 @@ class MyApp extends StatelessWidget {
           '/login': (context) => LoginScreen(),
           '/register': (context) => RegisterScreen(),
           '/home': (context) => const HomeScreen(),
+          '/bookDetails': (context) {
+            final book = ModalRoute.of(context)!.settings.arguments as Book;
+            return BookDetailsScreen(book: book);
+          },
+          '/profile': (context) => const ProfileScreen(),
+          '/write_book': (context) => const WriteBookScreen(),
+          '/write_content': (context) {
+            final book = ModalRoute.of(context)!.settings.arguments as Book;
+            return WriteBookContentScreen(book: book);
+          },
         },
       ),
     );

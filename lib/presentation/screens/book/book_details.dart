@@ -1,10 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:books/presentation/widgets/global/custom_button.dart';
 import 'package:books/domain/entities/book/book.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   final Book book;
-  const BookDetailsScreen({Key? key, required this.book}) : super(key: key);
+  const BookDetailsScreen({super.key, required this.book});
 
   @override
   _BookDetailsScreenState createState() => _BookDetailsScreenState();
@@ -13,6 +14,28 @@ class BookDetailsScreen extends StatefulWidget {
 class _BookDetailsScreenState extends State<BookDetailsScreen> {
   bool _descriptionExpanded = false;
   bool _showFullComments = false;
+  final ScrollController _scrollController = ScrollController();
+
+  // Genera un degradado aleatorio para el banner
+  LinearGradient _generateRandomGradient() {
+    final random = Random();
+    Color randomColor() => Color.fromARGB(
+          255,
+          random.nextInt(256),
+          random.nextInt(256),
+          random.nextInt(256),
+        );
+    final color1 = randomColor();
+    final color2 = randomColor();
+    final begin =
+        Alignment(random.nextDouble() * 2 - 1, random.nextDouble() * 2 - 1);
+    final end = Alignment(-begin.x, -begin.y);
+    return LinearGradient(
+      begin: begin,
+      end: end,
+      colors: [color1, color2],
+    );
+  }
 
   void _toggleDescription() {
     setState(() {
@@ -23,10 +46,18 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   void _toggleComments() {
     setState(() {
       _showFullComments = !_showFullComments;
+      if (_showFullComments) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        });
+      }
     });
   }
 
-  // Opciones de la appbar de detalles: "No me interesa" y "Reportar"
   void _showOptions() {
     showModalBottomSheet(
       context: context,
@@ -57,15 +88,14 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Usamos Hero para la transición (el tag debe ser único, por ejemplo, el id del libro)
     return Scaffold(
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
             backgroundColor: Colors.transparent,
-            // Botón para volver y otro para opciones
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.pop(context),
@@ -81,11 +111,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                 tag: widget.book.id,
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.deepPurple, Colors.purpleAccent],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    gradient: _generateRandomGradient(),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -157,7 +183,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Sinopsis o descripción con opción a expandir
                   GestureDetector(
                     onTap: _toggleDescription,
                     child: AnimatedCrossFade(
@@ -175,14 +200,15 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  CustomButton(
-                    text: 'Leer Libro',
-                    onPressed: () {
-                      // Navegar a la pantalla de lectura (donde se muestra el contenido en un modal)
-                    },
+                  Center(
+                    child: CustomButton(
+                      text: 'Leer Libro',
+                      onPressed: () {
+                        // Navegar a la pantalla de lectura (modal) cuando se implemente
+                      },
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  // Sección de comentarios (se muestran 3 inicialmente)
                   const Text(
                     'Comentarios',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -190,82 +216,63 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                   const SizedBox(height: 8),
                   Column(
                     children: [
-                      // Comentarios de ejemplo
-                      ListTile(
+                      const ListTile(
                         leading: CircleAvatar(child: Text('A')),
                         title: Text('Comentario 1'),
                         subtitle: Text('Muy interesante la trama.'),
                       ),
-                      ListTile(
+                      const ListTile(
                         leading: CircleAvatar(child: Text('B')),
                         title: Text('Comentario 2'),
                         subtitle: Text('Me encantó la narrativa.'),
                       ),
-                      ListTile(
+                      const ListTile(
                         leading: CircleAvatar(child: Text('C')),
                         title: Text('Comentario 3'),
                         subtitle: Text('Recomiendo este libro.'),
                       ),
+                      if (_showFullComments)
+                        const Column(
+                          children: [
+                            ListTile(
+                              leading: CircleAvatar(child: Text('D')),
+                              title: Text('Comentario 4'),
+                              subtitle: Text('Un clásico renovado.'),
+                            ),
+                            ListTile(
+                              leading: CircleAvatar(child: Text('E')),
+                              title: Text('Comentario 5'),
+                              subtitle: Text('Muy bien escrito.'),
+                            ),
+                            ListTile(
+                              leading: CircleAvatar(child: Text('F')),
+                              title: Text('Comentario 6'),
+                              subtitle: Text('Me dejó pensando.'),
+                            ),
+                          ],
+                        ),
+                      Center(
+                        child: TextButton(
+                          onPressed: _toggleComments,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.blue,
+                          ),
+                          child: Text(
+                            _showFullComments
+                                ? 'Mostrar menos comentarios'
+                                : 'Cargar más comentarios',
+                            style: const TextStyle(
+                                decoration: TextDecoration.none),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  Center(
-                    child: TextButton(
-                      onPressed: _toggleComments,
-                      child: Text(_showFullComments
-                          ? 'Mostrar menos comentarios'
-                          : 'Cargar más comentarios'),
-                    ),
-                  ),
-                  // Si se han cargado más comentarios, se muestran (este es un ejemplo)
-                  if (_showFullComments)
-                    Column(
-                      children: [
-                        ListTile(
-                          leading: CircleAvatar(child: Text('D')),
-                          title: Text('Comentario 4'),
-                          subtitle: Text('Un clásico renovado.'),
-                        ),
-                        ListTile(
-                          leading: CircleAvatar(child: Text('E')),
-                          title: Text('Comentario 5'),
-                          subtitle: Text('Muy bien escrito.'),
-                        ),
-                        ListTile(
-                          leading: CircleAvatar(child: Text('F')),
-                          title: Text('Comentario 6'),
-                          subtitle: Text('Me dejó pensando.'),
-                        ),
-                      ],
-                    ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-      bottomNavigationBar: BottomAppBar(
-        elevation: 0,
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.star, color: Colors.amber),
-                onPressed: () {
-                  // Acción para calificar el libro (puedes abrir un diálogo o navegar a una pantalla específica)
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.comment, color: Colors.blue),
-                onPressed: () {
-                  // Aquí podrías desplazar el scroll hacia la sección de comentarios o abrir un modal
-                },
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

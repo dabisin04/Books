@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../domain/entities/book/book.dart';
+import '../../screens/book/book_details.dart';
 
 class RecentBooksCarousel extends StatefulWidget {
   final List<Book> books;
@@ -20,7 +21,6 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
   @override
   void initState() {
     super.initState();
-    // Inicia un timer que pasa de página cada 3 segundos
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (_currentPage < widget.books.length - 1) {
         _currentPage++;
@@ -42,7 +42,6 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
     super.dispose();
   }
 
-  /// Genera un degradado aleatorio
   LinearGradient _generateRandomGradient() {
     final random = Random();
     Color randomColor() => Color.fromARGB(
@@ -70,11 +69,10 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
     }
 
     return SizedBox(
-      height: 200, // Altura del carrusel
+      height: 200,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // PageView que muestra cada libro
           PageView.builder(
             controller: _pageController,
             itemCount: widget.books.length,
@@ -88,7 +86,6 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
               return _buildBanner(book);
             },
           ),
-          // Título fijo "Más Recientes"
           Positioned(
             top: 10,
             left: 10,
@@ -108,7 +105,6 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
               ),
             ),
           ),
-          // Indicador de páginas (bolitas) en la parte inferior
           Positioned(
             bottom: 10,
             left: 0,
@@ -136,26 +132,36 @@ class _RecentBooksCarouselState extends State<RecentBooksCarousel> {
   }
 
   Widget _buildBanner(Book book) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: _generateRandomGradient(),
-      ),
-      child: Center(
-        child: Text(
-          book.title,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [
-              Shadow(
-                blurRadius: 4,
-                color: Colors.black45,
-                offset: Offset(2, 2),
-              ),
-            ],
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BookDetailsScreen(book: book),
           ),
-          textAlign: TextAlign.center,
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: _generateRandomGradient(),
+        ),
+        child: Center(
+          child: Text(
+            book.title,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 4,
+                  color: Colors.black45,
+                  offset: Offset(2, 2),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );

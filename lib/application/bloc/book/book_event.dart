@@ -79,3 +79,23 @@ class UpdateBookContent extends BookEvent {
 class GetTopRatedBooks extends BookEvent {}
 
 class GetMostViewedBooks extends BookEvent {}
+
+class UpdateBookPublicationDate extends BookEvent {
+  final String bookId;
+  final String? publicationDate;
+
+  const UpdateBookPublicationDate(this.bookId, this.publicationDate);
+
+  @override
+  List<Object?> get props => [bookId, publicationDate];
+}
+
+class UpdateBookDetails extends BookEvent {
+  final String bookId;
+  final String? title;
+  final List<String>? additionalGenres;
+  final String? genre;
+
+  UpdateBookDetails(
+      {required this.bookId, this.title, this.additionalGenres, this.genre});
+}

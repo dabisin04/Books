@@ -10,6 +10,7 @@ class Book extends Equatable {
   final String genre;
   final List<String> additionalGenres;
   final String uploadDate;
+  final DateTime? publicationDate;
   final int views;
   final double rating;
   final int ratingsCount;
@@ -26,6 +27,7 @@ class Book extends Equatable {
     required this.genre,
     this.additionalGenres = const [],
     required this.uploadDate,
+    this.publicationDate,
     this.views = 0,
     this.rating = 0.0,
     this.ratingsCount = 0,
@@ -33,6 +35,14 @@ class Book extends Equatable {
     this.content,
   }) : id = id ?? _uuid.v4();
 
+  /// Verifica si el libro ya fue publicado
+  bool get isPublished {
+    if (publicationDate == null) return false;
+    return publicationDate!.isBefore(DateTime.now()) ||
+        publicationDate!.isAtSameMomentAs(DateTime.now());
+  }
+
+  /// Retorna una nueva instancia de `Book` con valores modificados
   Book copyWith({
     String? id,
     String? title,
@@ -41,6 +51,7 @@ class Book extends Equatable {
     String? genre,
     List<String>? additionalGenres,
     String? uploadDate,
+    DateTime? publicationDate,
     int? views,
     double? rating,
     int? ratingsCount,
@@ -53,8 +64,9 @@ class Book extends Equatable {
       authorId: authorId ?? this.authorId,
       description: description ?? this.description,
       genre: genre ?? this.genre,
-      additionalGenres: additionalGenres ?? this.additionalGenres,
+      additionalGenres: additionalGenres ?? List.from(this.additionalGenres),
       uploadDate: uploadDate ?? this.uploadDate,
+      publicationDate: publicationDate ?? this.publicationDate,
       views: views ?? this.views,
       rating: rating ?? this.rating,
       ratingsCount: ratingsCount ?? this.ratingsCount,
@@ -63,6 +75,7 @@ class Book extends Equatable {
     );
   }
 
+  /// Convierte el objeto `Book` en un `Map<String, dynamic>` para almacenarlo
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -72,6 +85,7 @@ class Book extends Equatable {
       'genre': genre,
       'additional_genres': jsonEncode(additionalGenres),
       'upload_date': uploadDate,
+      'publication_date': publicationDate?.toIso8601String(),
       'views': views,
       'rating': rating,
       'ratings_count': ratingsCount,
@@ -80,21 +94,25 @@ class Book extends Equatable {
     };
   }
 
+  /// Crea un objeto `Book` a partir de un `Map<String, dynamic>`
   factory Book.fromMap(Map<String, dynamic> map) {
     return Book(
-      id: map['id'],
-      title: map['title'],
-      authorId: map['author_id'],
+      id: map['id'] ?? _uuid.v4(),
+      title: map['title'] ?? 'Sin título',
+      authorId: map['author_id'] ?? 'Desconocido',
       description: map['description'],
-      genre: map['genre'],
+      genre: map['genre'] ?? 'Sin género',
       additionalGenres: map['additional_genres'] != null
           ? List<String>.from(jsonDecode(map['additional_genres']))
           : [],
-      uploadDate: map['upload_date'],
-      views: map['views'],
-      rating: (map['rating'] as num).toDouble(),
-      ratingsCount: map['ratings_count'],
-      reports: map['reports'],
+      uploadDate: map['upload_date'] ?? DateTime.now().toIso8601String(),
+      publicationDate: map['publication_date'] != null
+          ? DateTime.tryParse(map['publication_date'])
+          : null,
+      views: map['views'] ?? 0,
+      rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+      ratingsCount: map['ratings_count'] ?? 0,
+      reports: map['reports'] ?? 0,
       content: map['content'],
     );
   }
@@ -108,6 +126,7 @@ class Book extends Equatable {
         genre,
         additionalGenres,
         uploadDate,
+        publicationDate,
         views,
         rating,
         ratingsCount,

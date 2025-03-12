@@ -9,11 +9,11 @@ class BookCard extends StatelessWidget {
       views; // Si se proporciona, se muestra en la esquina inferior derecha.
 
   const BookCard({
-    Key? key,
+    super.key,
     required this.title,
     this.rating,
     this.views,
-  }) : super(key: key);
+  });
 
   LinearGradient _generateRandomGradient() {
     final random = Random();
@@ -38,7 +38,7 @@ class BookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 250,
+      width: 120,
       height: 150,
       margin: const EdgeInsets.symmetric(horizontal: 8.0),
       decoration: BoxDecoration(

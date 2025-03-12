@@ -27,7 +27,7 @@ class HamburgerMenu extends StatelessWidget {
             title: const Text('Perfil'),
             onTap: () {
               Navigator.pop(context);
-              // Aquí puedes agregar navegación a perfil si es necesario.
+              Navigator.pushReplacementNamed(context, '/profile');
             },
           ),
           ListTile(

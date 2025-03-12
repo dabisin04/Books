@@ -156,6 +156,35 @@ class BookRepositoryImpl implements BookRepository {
     await _cacheBooks();
   }
 
+  @override
+  Future<void> updateBookPublicationDate(
+      String bookId, String? publicationDate) async {
+    final db = await _database;
+    await db.update(
+      'books',
+      {'publication_date': publicationDate},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+    await _cacheBooks();
+  }
+
+  Future<void> updateBookDetails(String bookId,
+      {String? title, List<String>? additionalGenres, String? genre}) async {
+    final db = await _database;
+    final values = <String, dynamic>{};
+
+    if (title != null) values['title'] = title;
+    if (additionalGenres != null)
+      values['additional_genres'] = jsonEncode(additionalGenres);
+    if (genre != null) values['genre'] = genre;
+
+    if (values.isNotEmpty) {
+      await db.update('books', values, where: 'id = ?', whereArgs: [bookId]);
+      await _cacheBooks();
+    }
+  }
+
   Future<void> _cacheBooks() async {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query('books');
