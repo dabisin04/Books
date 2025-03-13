@@ -7,7 +7,7 @@ class Comment extends Equatable {
   final String bookId;
   final String content;
   final String timestamp;
-  final String? parentCommentId; // Para respuestas a otros comentarios
+  final String? parentCommentId;
   final int reports;
 
   static const Uuid _uuid = Uuid();
@@ -20,9 +20,28 @@ class Comment extends Equatable {
     required this.timestamp,
     this.parentCommentId,
     this.reports = 0,
-  }) : id = id ?? _uuid.v4(); // Genera un UUID si no se proporciona
+  }) : id = id ?? _uuid.v4();
 
-  // Convertir a Map para la base de datos
+  Comment copyWith({
+    String? id,
+    String? userId,
+    String? bookId,
+    String? content,
+    String? timestamp,
+    String? parentCommentId,
+    int? reports,
+  }) {
+    return Comment(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      bookId: bookId ?? this.bookId,
+      content: content ?? this.content,
+      timestamp: timestamp ?? this.timestamp,
+      parentCommentId: parentCommentId ?? this.parentCommentId,
+      reports: reports ?? this.reports,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -35,7 +54,6 @@ class Comment extends Equatable {
     };
   }
 
-  // Crear instancia desde un Map (BD)
   factory Comment.fromMap(Map<String, dynamic> map) {
     return Comment(
       id: map['id'],
@@ -49,6 +67,13 @@ class Comment extends Equatable {
   }
 
   @override
-  List<Object?> get props =>
-      [id, userId, bookId, content, timestamp, parentCommentId, reports];
+  List<Object?> get props => [
+        id,
+        userId,
+        bookId,
+        content,
+        timestamp,
+        parentCommentId,
+        reports,
+      ];
 }

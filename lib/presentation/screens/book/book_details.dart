@@ -2,12 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/screens/book/write_book_content.dart';
 import 'package:books/presentation/screens/book/write_book.dart';
 import 'package:books/presentation/widgets/global/custom_button.dart';
-import '../../../application/bloc/book/book_bloc.dart';
-import '../../../application/bloc/book/book_event.dart';
-import '../../../application/bloc/book/book_state.dart';
 import '../../../application/bloc/user/user_bloc.dart';
 import '../../../application/bloc/user/user_state.dart';
 
@@ -25,7 +21,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
   String? _authorName;
 
-  // Genera un degradado aleatorio para el banner
   LinearGradient _generateRandomGradient() {
     final random = Random();
     Color randomColor() => Color.fromARGB(
@@ -63,7 +58,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   void _showOptions() {
-    // Se determina si el usuario actual es el autor
     final isAuthor = context.read<UserBloc>().state is UserAuthenticated &&
         (context.read<UserBloc>().state as UserAuthenticated).user.id ==
             widget.book.authorId;
@@ -72,7 +66,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            // Si no es el autor, se muestra "No me interesa"
             if (!isAuthor)
               ListTile(
                 leading: const Icon(Icons.thumb_down),
@@ -95,22 +88,17 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   Future<void> _fetchAuthorName() async {
-    print(
-        "Autor ID recibido: ${widget.book.authorId}"); // Verifica el ID recibido
-
+    print("Autor ID recibido: ${widget.book.authorId}");
     final userState = context.read<UserBloc>().state;
-
     if (userState is UserAuthenticated) {
       final user = userState.user;
       if (user.id == widget.book.authorId) {
         setState(() {
-          _authorName = user.username; // Usamos username en lugar de name
+          _authorName = user.username;
         });
         return;
       }
     }
-
-    // Si no está en el estado del Bloc, se podría realizar otra consulta.
     await Future.delayed(const Duration(milliseconds: 500));
     setState(() {
       _authorName = "Desconocido";
@@ -125,7 +113,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Se obtiene el estado del usuario para determinar si es el autor del libro
     final userState = context.watch<UserBloc>().state;
     final isAuthor = userState is UserAuthenticated &&
         userState.user.id == widget.book.authorId;
@@ -134,7 +121,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       floatingActionButton: isAuthor
           ? FloatingActionButton(
               onPressed: () {
-                // Si es el autor, permite editar: navega a la pantalla de escribir libro
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -142,7 +128,13 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                   ),
                 );
               },
-              child: const Icon(Icons.edit),
+              backgroundColor: Colors.redAccent[100],
+              child: Image.asset(
+                'images/pluma.png',
+                width: 24,
+                height: 24,
+                color: Colors.white,
+              ),
             )
           : null,
       body: CustomScrollView(
@@ -260,7 +252,12 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     child: CustomButton(
                       text: 'Leer Libro',
                       onPressed: () {
-                        // Navegar a la pantalla de lectura (modal) cuando se implemente
+                        // Redirigir a la pantalla de lectura del contenido
+                        Navigator.pushNamed(
+                          context,
+                          '/read_content',
+                          arguments: widget.book,
+                        );
                       },
                     ),
                   ),

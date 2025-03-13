@@ -1,17 +1,17 @@
+import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/screens/user/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
 import 'package:books/application/bloc/book/book_state.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_event.dart';
-import 'package:books/domain/entities/book/book.dart';
 import 'package:books/presentation/widgets/home/book_card.dart';
 import 'package:books/presentation/widgets/home/hamburguer_menu.dart';
 import 'package:books/presentation/widgets/home/recent_books_carousel.dart';
 import 'package:books/presentation/widgets/home/bottom_nav_bar.dart';
-import 'package:books/presentation/screens/book/book_details.dart';
-import 'package:books/presentation/screens/user/profile.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,11 +27,21 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null &&
+        args is Map<String, dynamic> &&
+        args.containsKey('initialTab')) {
+      _currentIndex = args['initialTab'] as int;
+    }
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _currentIndex);
     context.read<BookBloc>().add(LoadBooks());
-
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
@@ -52,8 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
         if (state is BookLoading) {
           return const Center(child: CircularProgressIndicator());
         } else if (state is BookLoaded) {
-          List<Book> allBooks = state.books;
-          List<Book> filteredBooks = allBooks.where((book) {
+          // Filtrar solo los libros publicados.
+          final List<Book> publishedBooks =
+              state.books.where((book) => book.isPublished).toList();
+
+          // Se realiza la búsqueda entre los libros publicados.
+          final List<Book> filteredBooks = publishedBooks.where((book) {
             return book.title.toLowerCase().contains(_searchQuery) ||
                 book.genre.toLowerCase().contains(_searchQuery);
           }).toList();
@@ -66,19 +80,21 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                RecentBooksCarousel(books: allBooks),
+                RecentBooksCarousel(books: publishedBooks),
                 const SizedBox(height: 24.0),
                 _buildHorizontalList(
                   title: "Mejor Calificados",
-                  books: allBooks..sort((a, b) => b.rating.compareTo(a.rating)),
+                  books: List<Book>.from(publishedBooks)
+                    ..sort((a, b) => b.rating.compareTo(a.rating)),
                 ),
                 const SizedBox(height: 24.0),
                 _buildHorizontalList(
                   title: "Más Vistos",
-                  books: allBooks..sort((a, b) => b.views.compareTo(a.views)),
+                  books: List<Book>.from(publishedBooks)
+                    ..sort((a, b) => b.views.compareTo(a.views)),
                 ),
                 const SizedBox(height: 24.0),
-                _buildGenreSections(allBooks),
+                _buildGenreSections(publishedBooks),
               ],
             ),
           );
@@ -114,10 +130,9 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
+          child: Text(title,
+              style:
+                  const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         ),
         const SizedBox(height: 8.0),
         SizedBox(
@@ -171,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
-      drawer: const HamburgerMenu(),
+      drawer: const HamburguerMenu(),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(_currentIndex == 4 ? 0 : 82),
         child: AnimatedContainer(

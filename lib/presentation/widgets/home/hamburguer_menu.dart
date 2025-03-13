@@ -3,8 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../application/bloc/user/user_bloc.dart';
 import '../../../application/bloc/user/user_event.dart';
 
-class HamburgerMenu extends StatelessWidget {
-  const HamburgerMenu({Key? key}) : super(key: key);
+class HamburguerMenu extends StatelessWidget {
+  const HamburguerMenu({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -87,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Container(
                           padding:
-                              const EdgeInsets.fromLTRB(16.0, 22.0, 16.0, 16.0),
+                              const EdgeInsets.fromLTRB(16.0, 30.0, 16.0, 16.0),
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
                               colors: [Colors.teal, Colors.greenAccent],

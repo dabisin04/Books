@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
+import '../../widgets/book/custom_quill_tool_bar.dart';
+import '../loading.dart';
 
 class WriteBookContentScreen extends StatefulWidget {
   final Book book;
@@ -18,14 +19,13 @@ class WriteBookContentScreen extends StatefulWidget {
 
 class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   late final quill.QuillController _controller;
-  final ScrollController _editorScrollController = ScrollController();
-  final FocusNode _editorFocusNode = FocusNode();
   DateTime? _selectedPublicationDate;
 
   @override
   void initState() {
     super.initState();
     _selectedPublicationDate = widget.book.publicationDate;
+    // Si existe contenido, se carga desde JSON; de lo contrario, se crea un documento vacío.
     if (widget.book.content != null && widget.book.content!.isNotEmpty) {
       try {
         final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));
@@ -44,8 +44,6 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   @override
   void dispose() {
     _controller.dispose();
-    _editorScrollController.dispose();
-    _editorFocusNode.dispose();
     super.dispose();
   }
 
@@ -70,6 +68,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
       content: contentJson,
       publicationDate: _selectedPublicationDate,
     );
+
     context
         .read<BookBloc>()
         .add(UpdateBookContent(updatedBook.id, contentJson));
@@ -81,69 +80,109 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
             ),
           );
     }
+
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("Libro actualizado correctamente"),
         duration: Duration(seconds: 2),
       ),
     );
-    Navigator.pop(context, updatedBook);
+
+    // Redirigir a la pantalla de carga
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoadingScreen()),
+    );
+  }
+
+  void _showSaveModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Opciones de publicación",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Fecha de publicación:",
+                      style: TextStyle(fontSize: 16)),
+                  TextButton(
+                    onPressed: _pickPublicationDate,
+                    child: Text(
+                      _selectedPublicationDate != null
+                          ? _selectedPublicationDate!
+                              .toLocal()
+                              .toIso8601String()
+                              .substring(0, 10)
+                          : "Seleccionar",
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _finishBookCreation,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 32),
+                ),
+                child: const Text("Guardar",
+                    style: TextStyle(fontSize: 16, color: Colors.white)),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancelar"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Editor de Contenido")),
-      body: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: quill.QuillEditor(
-                  controller: _controller,
-                  scrollController: _editorScrollController,
-                  focusNode: _editorFocusNode,
-                ),
-              ),
-            ),
+      appBar: AppBar(
+        title: Text(
+          widget.book.title,
+          style: const TextStyle(fontSize: 16),
+        ),
+        toolbarHeight: 44,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _showSaveModal,
           ),
-          // Use the custom compact toolbar as a bottom toolbar.
-          CompactQuillToolbar(controller: _controller),
-          // Publication date selector.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-            child: Row(
-              children: [
-                ElevatedButton(
-                  onPressed: _pickPublicationDate,
-                  child: const Text("Fecha de publicación"),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  _selectedPublicationDate != null
-                      ? "Fecha: ${_selectedPublicationDate!.toLocal().toIso8601String().substring(0, 10)}"
-                      : "Sin fecha",
-                ),
-              ],
-            ),
-          ),
-          // Save button.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-            child: ElevatedButton(
-              onPressed: _finishBookCreation,
-              child: const Text("Guardar"),
-            ),
-          ),
-          const SizedBox(height: 16),
         ],
+      ),
+      body: quill.QuillEditor(
+        controller: _controller,
+        scrollController: ScrollController(),
+        focusNode: FocusNode(),
+      ),
+      bottomSheet: Container(
+        color: Colors.grey.shade200,
+        width: double.infinity,
+        child: CompactQuillToolbar(controller: _controller),
       ),
     );
   }

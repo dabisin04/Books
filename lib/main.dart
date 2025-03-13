@@ -1,22 +1,26 @@
 import 'package:books/presentation/screens/book/book_details.dart';
-import 'package:books/presentation/screens/home.dart';
-import 'package:books/presentation/screens/splash_screen.dart';
+import 'package:books/presentation/screens/book/write_book.dart';
+import 'package:books/presentation/screens/book/write_book_content.dart';
+import 'package:books/presentation/screens/book/read_contet.dart';
 import 'package:books/presentation/screens/auth/login.dart';
 import 'package:books/presentation/screens/auth/register.dart';
+import 'package:books/presentation/screens/home.dart';
+import 'package:books/presentation/screens/splash_screen.dart';
 import 'package:books/presentation/screens/user/profile.dart';
+import 'package:books/domain/entities/book/book.dart';
+import 'package:books/domain/theme/app_theme.dart';
+import 'package:books/application/bloc/book/book_bloc.dart';
+import 'package:books/application/bloc/user/user_bloc.dart';
+import 'package:books/application/bloc/comment/comment_bloc.dart';
+import 'package:books/infrastructure/adapters/book_repository_impl.dart';
+import 'package:books/infrastructure/adapters/user_repository_impl.dart';
+import 'package:books/infrastructure/adapters/comment_repository_impl.dart';
+import 'package:books/infrastructure/utils/shared_prefs_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
-import 'domain/entities/book/book.dart';
-import 'domain/theme/app_theme.dart';
-import 'application/bloc/book/book_bloc.dart';
-import 'application/bloc/user/user_bloc.dart';
-import 'infrastructure/adapters/book_repository_impl.dart';
-import 'infrastructure/adapters/user_repository_impl.dart';
-import 'infrastructure/utils/shared_prefs_helper.dart';
-import 'presentation/screens/book/write_book.dart';
-import 'presentation/screens/book/write_book_content.dart';
+import 'domain/ports/interaction/comment_repository.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -27,21 +31,25 @@ void main() async {
 
   final userRepository = UserRepositoryImpl(SharedPrefsService());
   final bookRepository = BookRepositoryImpl(SharedPrefsService());
+  final commentRepository = CommentRepositoryImpl(SharedPrefsService());
 
   runApp(MyApp(
     userRepository: userRepository,
     bookRepository: bookRepository,
+    commentRepository: commentRepository,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final UserRepositoryImpl userRepository;
   final BookRepositoryImpl bookRepository;
+  final CommentRepository commentRepository;
 
   const MyApp({
     super.key,
     required this.userRepository,
     required this.bookRepository,
+    required this.commentRepository,
   });
 
   @override
@@ -54,20 +62,21 @@ class MyApp extends StatelessWidget {
         BlocProvider<BookBloc>(
           create: (_) => BookBloc(bookRepository, userRepository),
         ),
+        BlocProvider<CommentBloc>(
+          create: (_) => CommentBloc(commentRepository),
+        ),
       ],
       child: MaterialApp(
         scaffoldMessengerKey: scaffoldMessengerKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
-        // Agrega los delegates de localización
         localizationsDelegates: const [
           quill.FlutterQuillLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        // Define los locales soportados
         supportedLocales: const [
           Locale('en'),
           Locale('es'),
@@ -87,6 +96,10 @@ class MyApp extends StatelessWidget {
           '/write_content': (context) {
             final book = ModalRoute.of(context)!.settings.arguments as Book;
             return WriteBookContentScreen(book: book);
+          },
+          '/read_content': (context) {
+            final book = ModalRoute.of(context)!.settings.arguments as Book;
+            return ReadBookContentScreen(book: book);
           },
         },
       ),

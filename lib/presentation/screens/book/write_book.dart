@@ -1,13 +1,13 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/presentation/screens/book/write_book_content.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:books/presentation/widgets/global/custom_button.dart';
 import '../../../application/bloc/book/book_bloc.dart';
 import '../../../application/bloc/book/book_event.dart';
 import '../../../application/bloc/book/book_state.dart';
 import '../../widgets/book/editable_animated_input_field.dart';
-import '../../widgets/global/custom_button.dart';
 
 const List<String> availableGenres = [
   "Ficción",
@@ -73,7 +73,8 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
           ) ??
           Book(
             title: _titleController.text.trim(),
-            authorId: "currentUserId",
+            authorId:
+                "currentUserId", // Aquí deberías obtener el id del usuario actual
             description: _descriptionController.text.trim().isEmpty
                 ? null
                 : _descriptionController.text.trim(),
@@ -116,7 +117,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       _titleController.text = widget.book!.title;
       _descriptionController.text = widget.book!.description ?? '';
       _selectedMainGenre = widget.book!.genre;
-      _selectedAdditionalGenres = widget.book!.additionalGenres ?? [];
+      _selectedAdditionalGenres = widget.book!.additionalGenres;
     }
     _titleController.addListener(_onTitleChanged);
     _descriptionController.addListener(() {
@@ -133,142 +134,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocListener<BookBloc, BookState>(
-      listener: (context, state) {
-        print("Estado recibido: $state");
-        if (state is BookAdded) {
-          print("Libro agregado: ${state.book}");
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WriteBookContentScreen(book: state.book),
-            ),
-          );
-        } else if (state is BookUpdated) {
-          print("Libro actualizado: ${state.book}");
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WriteBookContentScreen(book: state.book),
-            ),
-          );
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.book != null ? "Editar Libro" : "Escribir Libro"),
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 400),
-                        height: 120,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: _currentGradient,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          _titleController.text.isEmpty
-                              ? "Portada"
-                              : _titleController.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: EditableAnimatedInputField(
-                          label: "Título",
-                          controller: _titleController,
-                          validator: (value) => value == null || value.isEmpty
-                              ? "Ingresa el título"
-                              : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: InputDecoration(
-                      labelText: "Descripción (opcional)",
-                      border: _descriptionController.text.isEmpty
-                          ? const OutlineInputBorder()
-                          : InputBorder.none,
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _selectedMainGenre,
-                    decoration: InputDecoration(
-                      labelText: "Género Principal",
-                      border: _selectedMainGenre == null
-                          ? const OutlineInputBorder()
-                          : InputBorder.none,
-                    ),
-                    items: availableGenres.map((genre) {
-                      return DropdownMenuItem(
-                        value: genre,
-                        child: Text(genre),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedMainGenre = value;
-                      });
-                    },
-                    validator: (value) => value == null || value.isEmpty
-                        ? "Selecciona el género principal"
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: _selectAdditionalGenres,
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: "Géneros adicionales",
-                        border: _selectedAdditionalGenres.isEmpty
-                            ? const OutlineInputBorder()
-                            : InputBorder.none,
-                      ),
-                      child: Text(
-                        _selectedAdditionalGenres.isEmpty
-                            ? "Selecciona géneros adicionales (opcional)"
-                            : _selectedAdditionalGenres.join(', '),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  CustomButton(
-                    text: "Siguiente",
-                    onPressed: _goToContentScreen,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _selectAdditionalGenres() async {
@@ -316,5 +181,151 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
         _selectedAdditionalGenres = result;
       });
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async {
+        // Si el usuario decide volver atrás, redirigimos a la pantalla de carga.
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/splash',
+          (Route<dynamic> route) => false,
+          arguments: {'initialTab': 4},
+        );
+        return false;
+      },
+      child: BlocListener<BookBloc, BookState>(
+        listener: (context, state) {
+          if (state is BookAdded) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WriteBookContentScreen(book: state.book),
+              ),
+            );
+          } else if (state is BookUpdated) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => WriteBookContentScreen(book: state.book),
+              ),
+            );
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title:
+                Text(widget.book != null ? "Editar Libro" : "Escribir Libro"),
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
+                          height: 120,
+                          width: 150,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: _currentGradient,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _titleController.text.isEmpty
+                                ? "Portada"
+                                : _titleController.text,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: EditableAnimatedInputField(
+                            label: "Título",
+                            controller: _titleController,
+                            validator: (value) => value == null || value.isEmpty
+                                ? "Ingresa el título"
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _descriptionController,
+                      decoration: InputDecoration(
+                        labelText: "Descripción (opcional)",
+                        border: _descriptionController.text.isEmpty
+                            ? const OutlineInputBorder()
+                            : InputBorder.none,
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _selectedMainGenre,
+                      decoration: InputDecoration(
+                        labelText: "Género Principal",
+                        border: _selectedMainGenre == null
+                            ? const OutlineInputBorder()
+                            : InputBorder.none,
+                      ),
+                      items: availableGenres.map((genre) {
+                        return DropdownMenuItem(
+                          value: genre,
+                          child: Text(genre),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedMainGenre = value;
+                        });
+                      },
+                      validator: (value) => value == null || value.isEmpty
+                          ? "Selecciona el género principal"
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: _selectAdditionalGenres,
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: "Géneros adicionales",
+                          border: _selectedAdditionalGenres.isEmpty
+                              ? const OutlineInputBorder()
+                              : InputBorder.none,
+                        ),
+                        child: Text(
+                          _selectedAdditionalGenres.isEmpty
+                              ? "Selecciona géneros adicionales (opcional)"
+                              : _selectedAdditionalGenres.join(', '),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    CustomButton(
+                      text: "Siguiente",
+                      onPressed: _goToContentScreen,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
