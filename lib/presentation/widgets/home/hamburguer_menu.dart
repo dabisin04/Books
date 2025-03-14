@@ -10,7 +10,6 @@ class HamburguerMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       child: ListView(
-        // Quita el gran encabezado reemplazándolo por un SizedBox de pequeño tamaño
         padding: EdgeInsets.zero,
         children: [
           const SizedBox(height: 16.0),
@@ -34,8 +33,12 @@ class HamburguerMenu extends StatelessWidget {
             leading: const Icon(Icons.logout),
             title: const Text('Cerrar sesión'),
             onTap: () {
-              Navigator.pop(context);
-              context.read<UserBloc>().add(LogoutUser());
+              Navigator.pop(context); // Cierra el drawer
+              context
+                  .read<UserBloc>()
+                  .add(LogoutUser()); // Dispara el evento de cerrar sesión
+              Navigator.pushReplacementNamed(
+                  context, '/login'); // Redirige a login
             },
           ),
         ],

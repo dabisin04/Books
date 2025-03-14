@@ -147,7 +147,9 @@ class UserRepositoryImpl implements UserRepository {
 
   @override
   Future<void> logout() async {
-    await sharedPrefs.clear();
+    await sharedPrefs.removeValue("user_id");
+    await sharedPrefs.removeValue("username");
+    await sharedPrefs.removeValue("email");
   }
 
   @override

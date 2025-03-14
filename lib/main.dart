@@ -18,9 +18,12 @@ import 'package:books/infrastructure/adapters/comment_repository_impl.dart';
 import 'package:books/infrastructure/utils/shared_prefs_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+// ignore: depend_on_referenced_packages
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'domain/ports/interaction/comment_repository.dart';
+import 'package:books/domain/ports/book/book_repository.dart';
+import 'package:books/domain/ports/user/user_repository.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -54,54 +57,67 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    return MultiRepositoryProvider(
       providers: [
-        BlocProvider<UserBloc>(
-          create: (_) => UserBloc(userRepository: userRepository),
+        RepositoryProvider<UserRepository>(
+          create: (_) => userRepository,
         ),
-        BlocProvider<BookBloc>(
-          create: (_) => BookBloc(bookRepository, userRepository),
+        RepositoryProvider<BookRepository>(
+          create: (_) => bookRepository,
         ),
-        BlocProvider<CommentBloc>(
-          create: (_) => CommentBloc(commentRepository),
+        RepositoryProvider<CommentRepository>(
+          create: (_) => commentRepository,
         ),
       ],
-      child: MaterialApp(
-        scaffoldMessengerKey: scaffoldMessengerKey,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        localizationsDelegates: const [
-          quill.FlutterQuillLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<UserBloc>(
+            create: (_) => UserBloc(userRepository: userRepository),
+          ),
+          BlocProvider<BookBloc>(
+            create: (_) => BookBloc(bookRepository, userRepository),
+          ),
+          BlocProvider<CommentBloc>(
+            create: (_) => CommentBloc(commentRepository),
+          ),
         ],
-        supportedLocales: const [
-          Locale('en'),
-          Locale('es'),
-        ],
-        initialRoute: '/splash',
-        routes: {
-          '/splash': (context) => const SplashScreen(),
-          '/login': (context) => LoginScreen(),
-          '/register': (context) => RegisterScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/bookDetails': (context) {
-            final book = ModalRoute.of(context)!.settings.arguments as Book;
-            return BookDetailsScreen(book: book);
+        child: MaterialApp(
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          localizationsDelegates: const [
+            quill.FlutterQuillLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en'),
+            Locale('es'),
+          ],
+          initialRoute: '/splash',
+          routes: {
+            '/splash': (context) => const SplashScreen(),
+            '/login': (context) => LoginScreen(),
+            '/register': (context) => RegisterScreen(),
+            '/home': (context) => const HomeScreen(),
+            '/bookDetails': (context) {
+              final book = ModalRoute.of(context)!.settings.arguments as Book;
+              return BookDetailsScreen(book: book);
+            },
+            '/profile': (context) => const ProfileScreen(),
+            '/write_book': (context) => const WriteBookScreen(),
+            '/write_content': (context) {
+              final book = ModalRoute.of(context)!.settings.arguments as Book;
+              return WriteBookContentScreen(book: book);
+            },
+            '/read_content': (context) {
+              final book = ModalRoute.of(context)!.settings.arguments as Book;
+              return ReadBookContentScreen(book: book);
+            },
           },
-          '/profile': (context) => const ProfileScreen(),
-          '/write_book': (context) => const WriteBookScreen(),
-          '/write_content': (context) {
-            final book = ModalRoute.of(context)!.settings.arguments as Book;
-            return WriteBookContentScreen(book: book);
-          },
-          '/read_content': (context) {
-            final book = ModalRoute.of(context)!.settings.arguments as Book;
-            return ReadBookContentScreen(book: book);
-          },
-        },
+        ),
       ),
     );
   }

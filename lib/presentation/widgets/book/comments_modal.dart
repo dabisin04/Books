@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +11,8 @@ import 'package:books/application/bloc/comment/comment_state.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_state.dart';
 
+enum CommentMode { add, edit, reply }
+
 class CommentsModal extends StatefulWidget {
   final String bookId;
   const CommentsModal({Key? key, required this.bookId}) : super(key: key);
@@ -19,6 +23,8 @@ class CommentsModal extends StatefulWidget {
 
 class _CommentsModalState extends State<CommentsModal> {
   final TextEditingController _commentController = TextEditingController();
+  CommentMode _commentMode = CommentMode.add;
+  String? _targetCommentId;
 
   @override
   void initState() {
@@ -32,132 +38,41 @@ class _CommentsModalState extends State<CommentsModal> {
     super.dispose();
   }
 
+  void _cancelCommentMode() {
+    setState(() {
+      _commentMode = CommentMode.add;
+      _targetCommentId = null;
+      _commentController.clear();
+    });
+  }
+
   void _submitComment() {
     final text = _commentController.text.trim();
-    if (text.isNotEmpty) {
-      final currentUserState = context.read<UserBloc>().state;
-      if (currentUserState is UserAuthenticated) {
-        final comment = Comment(
-          userId: currentUserState.user.id,
-          bookId: widget.bookId,
-          content: text,
-          timestamp: DateTime.now().toIso8601String(),
-        );
-        context.read<CommentBloc>().add(AddComment(comment));
-        _commentController.clear();
-        context.read<CommentBloc>().add(FetchCommentsByBook(widget.bookId));
-      }
+    if (text.isEmpty) return;
+    final currentUserState = context.read<UserBloc>().state;
+    if (currentUserState is! UserAuthenticated) return;
+    if (_commentMode == CommentMode.add) {
+      final comment = Comment(
+        userId: currentUserState.user.id,
+        bookId: widget.bookId,
+        content: text,
+        timestamp: DateTime.now().toIso8601String(),
+      );
+      context.read<CommentBloc>().add(AddComment(comment));
+    } else if (_commentMode == CommentMode.edit && _targetCommentId != null) {
+      context.read<CommentBloc>().add(UpdateComment(_targetCommentId!, text));
+    } else if (_commentMode == CommentMode.reply && _targetCommentId != null) {
+      final reply = Comment(
+        userId: currentUserState.user.id,
+        bookId: widget.bookId,
+        content: text,
+        timestamp: DateTime.now().toIso8601String(),
+        parentCommentId: _targetCommentId,
+      );
+      context.read<CommentBloc>().add(AddComment(reply));
     }
-  }
-
-  void _editComment(Comment comment) {
-    _commentController.text = comment.content;
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Editar comentario"),
-          content: TextField(
-            controller: _commentController,
-            decoration: const InputDecoration(hintText: "Nuevo contenido"),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                final newText = _commentController.text.trim();
-                if (newText.isNotEmpty) {
-                  context
-                      .read<CommentBloc>()
-                      .add(UpdateComment(comment.id, newText));
-                  Navigator.pop(context);
-                  context
-                      .read<CommentBloc>()
-                      .add(FetchCommentsByBook(widget.bookId));
-                }
-              },
-              child: const Text("Guardar"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _deleteComment(Comment comment) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Eliminar comentario"),
-          content: const Text("¿Estás seguro de eliminar este comentario?"),
-          actions: [
-            TextButton(
-              onPressed: () {
-                context.read<CommentBloc>().add(DeleteComment(comment.id));
-                Navigator.pop(context);
-                context
-                    .read<CommentBloc>()
-                    .add(FetchCommentsByBook(widget.bookId));
-              },
-              child: const Text("Eliminar"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showReplyDialog(Comment parentComment) {
-    final replyController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Responder comentario"),
-          content: TextField(
-            controller: replyController,
-            decoration: const InputDecoration(hintText: "Escribe tu respuesta"),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                final text = replyController.text.trim();
-                if (text.isNotEmpty) {
-                  final currentUserState = context.read<UserBloc>().state;
-                  if (currentUserState is UserAuthenticated) {
-                    final reply = Comment(
-                      userId: currentUserState.user.id,
-                      bookId: widget.bookId,
-                      content: text,
-                      timestamp: DateTime.now().toIso8601String(),
-                      parentCommentId: parentComment.id,
-                    );
-                    context.read<CommentBloc>().add(AddComment(reply));
-                    Navigator.pop(context);
-                    context
-                        .read<CommentBloc>()
-                        .add(FetchCommentsByBook(widget.bookId));
-                  }
-                }
-              },
-              child: const Text("Enviar"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancelar"),
-            ),
-          ],
-        );
-      },
-    );
+    _cancelCommentMode();
+    context.read<CommentBloc>().add(FetchCommentsByBook(widget.bookId));
   }
 
   String _formatTimestamp(String isoTimestamp) {
@@ -169,72 +84,142 @@ class _CommentsModalState extends State<CommentsModal> {
     }
   }
 
-  Widget _buildCommentTree(
-      List<Comment> comments, String? parentId, int level) {
-    final indent = level * 20.0;
+  String _getUserName(String userId) {
+    final userState = context.read<UserBloc>().state;
+    if (userState is UserAuthenticated && userState.user.id == userId) {
+      return userState.user.username;
+    }
+    return userId.substring(0, 1).toUpperCase() + userId.substring(1, 5);
+  }
+
+  /// Construye el árbol de comentarios de forma similar a BookDetailsScreen.
+  /// Se agrupan los comentarios padres y sus respuestas (limitando a 2 niveles).
+  Widget _buildCommentTree(List<Comment> comments,
+      {String? parentId, int level = 0}) {
+    final double indent = level >= 1 ? 20.0 : 0.0;
+    final children =
+        comments.where((c) => c.parentCommentId == parentId).toList();
+    if (children.isEmpty) return const SizedBox();
     return Column(
-      children: comments
-          .where((c) => c.parentCommentId == parentId)
-          .map((comment) => Padding(
-                padding: EdgeInsets.only(left: indent),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children.map((comment) {
+        // Obtener el comentario padre de forma segura (solo para generar el replyText)
+        Comment? parentComment;
+        if (comment.parentCommentId != null) {
+          try {
+            parentComment =
+                comments.firstWhere((c) => c.id == comment.parentCommentId);
+          } catch (e) {
+            parentComment = null;
+          }
+        }
+        final replyText = parentComment != null
+            ? "@${_getUserName(parentComment.userId)} ${comment.content}"
+            : comment.content;
+        final bool isReply = level >= 1;
+        final currentUserState = context.watch<UserBloc>().state;
+        final bool isAuthor = currentUserState is UserAuthenticated &&
+            currentUserState.user.id == comment.userId;
+        return Padding(
+          padding: EdgeInsets.only(left: indent),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 16.0, right: 8.0),
+                leading: CircleAvatar(
+                  child: Text(
+                    comment.userId.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+                title: Text(
+                  // Se muestra el nombre del usuario a partir de _getUserName.
+                  _getUserName(comment.userId),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                subtitle: Text(
+                  isReply ? replyText : comment.content,
+                  softWrap: true,
+                  overflow: TextOverflow.visible,
+                ),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'editar') {
+                      setState(() {
+                        _commentMode = CommentMode.edit;
+                        _targetCommentId = comment.id;
+                        _commentController.text = comment.content;
+                      });
+                    } else if (value == 'eliminar') {
+                      context
+                          .read<CommentBloc>()
+                          .add(DeleteComment(comment.id));
+                    } else if (value == 'responder') {
+                      setState(() {
+                        _commentMode = CommentMode.reply;
+                        _targetCommentId = comment.id;
+                        _commentController.clear();
+                      });
+                    }
+                  },
+                  itemBuilder: (context) {
+                    if (isAuthor) {
+                      return [
+                        const PopupMenuItem(
+                          value: 'editar',
+                          child: Text("Editar", style: TextStyle(fontSize: 12)),
+                        ),
+                        const PopupMenuItem(
+                          value: 'eliminar',
+                          child:
+                              Text("Eliminar", style: TextStyle(fontSize: 12)),
+                        ),
+                        const PopupMenuItem(
+                          value: 'responder',
+                          child:
+                              Text("Responder", style: TextStyle(fontSize: 12)),
+                        ),
+                      ];
+                    } else {
+                      return [
+                        const PopupMenuItem(
+                          value: 'responder',
+                          child:
+                              Text("Responder", style: TextStyle(fontSize: 12)),
+                        ),
+                      ];
+                    }
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 72.0, bottom: 4.0),
+                child: Row(
                   children: [
-                    ListTile(
-                      leading: CircleAvatar(
-                        child:
-                            Text(comment.userId.substring(0, 1).toUpperCase()),
-                      ),
-                      title: Text(
-                        comment.content,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.normal,
-                          color: Colors.black87,
+                    Text(
+                      _formatTimestamp(comment.timestamp),
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                    if (isReply)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8.0),
+                        child: Text(
+                          "Respuesta",
+                          style:
+                              TextStyle(fontSize: 10, color: Colors.blueGrey),
                         ),
                       ),
-                      subtitle: Text(
-                        _formatTimestamp(comment.timestamp),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (comment.userId ==
-                              (context.watch<UserBloc>().state
-                                      as UserAuthenticated?)
-                                  ?.user
-                                  .id)
-                            PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'editar') {
-                                  _editComment(comment);
-                                } else if (value == 'eliminar') {
-                                  _deleteComment(comment);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'editar',
-                                  child: Text("Editar"),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'eliminar',
-                                  child: Text("Eliminar"),
-                                ),
-                              ],
-                            ),
-                          IconButton(
-                            icon: const Icon(Icons.reply),
-                            onPressed: () => _showReplyDialog(comment),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildCommentTree(comments, comment.id, level + 1),
                   ],
                 ),
-              ))
-          .toList(),
+              ),
+              _buildCommentTree(comments,
+                  parentId: comment.id, level: level < 1 ? level + 1 : 1),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -242,6 +227,7 @@ class _CommentsModalState extends State<CommentsModal> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // Fondo borroso similar a BookDetailsScreen
         Positioned.fill(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
@@ -276,6 +262,41 @@ class _CommentsModalState extends State<CommentsModal> {
                     "Comentarios",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
+                  if (_commentMode != CommentMode.add)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            _commentMode == CommentMode.edit
+                                ? "Editando comentario"
+                                : "Respondiendo a comentario",
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.blue),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 16, color: Colors.blue),
+                            onPressed: _cancelCommentMode,
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _commentController,
+                    decoration: InputDecoration(
+                      hintText: "Escribe un comentario...",
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: _submitComment,
+                      ),
+                    ),
+                    onSubmitted: (_) => _submitComment(),
+                  ),
                   const SizedBox(height: 16),
                   Expanded(
                     child: BlocBuilder<CommentBloc, CommentState>(
@@ -291,35 +312,14 @@ class _CommentsModalState extends State<CommentsModal> {
                           }
                           return SingleChildScrollView(
                             controller: scrollController,
-                            child: _buildCommentTree(comments, null, 0),
+                            child: _buildCommentTree(comments),
                           );
                         } else if (state is CommentError) {
                           return Center(child: Text(state.message));
-                        } else if (state is CommentAdded ||
-                            state is CommentUpdated ||
-                            state is CommentDeleted) {
-                          // Mientras se recarga la lista, mostrar un indicador de carga
-                          context
-                              .read<CommentBloc>()
-                              .add(FetchCommentsByBook(widget.bookId));
-                          return const Center(
-                              child: CircularProgressIndicator());
                         }
                         return const SizedBox();
                       },
                     ),
-                  ),
-                  TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      hintText: "Escribe un comentario...",
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: _submitComment,
-                      ),
-                    ),
-                    onSubmitted: (_) => _submitComment(),
                   ),
                 ],
               ),

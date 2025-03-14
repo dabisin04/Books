@@ -1,8 +1,13 @@
+// ignore_for_file: deprecated_member_use, use_super_parameters, library_private_types_in_public_api
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
 
+import '../../../application/bloc/book/book_bloc.dart';
+import '../../../application/bloc/book/book_event.dart';
 import '../../widgets/book/comments_modal.dart';
 
 class ReadBookContentScreen extends StatefulWidget {
@@ -21,6 +26,9 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BookBloc>().add(UpdateBookViews(widget.book.id));
+    });
     if (widget.book.content != null && widget.book.content!.isNotEmpty) {
       try {
         final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));

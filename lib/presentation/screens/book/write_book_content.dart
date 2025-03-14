@@ -175,9 +175,17 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         ],
       ),
       body: quill.QuillEditor(
-        controller: _controller,
-        scrollController: ScrollController(),
         focusNode: FocusNode(),
+        scrollController: ScrollController(),
+        controller: _controller,
+        config: const quill.QuillEditorConfig(
+          scrollable: true,
+          padding: EdgeInsets.all(8.0),
+          autoFocus: true,
+          expands: false,
+          placeholder: 'Escribe tu contenido...',
+          // Puedes agregar otros parámetros si lo deseas
+        ),
       ),
       bottomSheet: Container(
         color: Colors.grey.shade200,
