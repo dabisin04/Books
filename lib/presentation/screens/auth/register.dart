@@ -17,7 +17,7 @@ class RegisterScreen extends StatelessWidget {
     return emailRegex.hasMatch(email);
   }
 
-  RegisterScreen({Key? key}) : super(key: key);
+  RegisterScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

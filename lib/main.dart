@@ -1,13 +1,14 @@
-import 'package:books/presentation/screens/book/book_details.dart';
-import 'package:books/presentation/screens/book/write_book.dart';
-import 'package:books/presentation/screens/book/write_book_content.dart';
-import 'package:books/presentation/screens/book/read_contet.dart';
-import 'package:books/presentation/screens/auth/login.dart';
-import 'package:books/presentation/screens/auth/register.dart';
-import 'package:books/presentation/screens/home.dart';
-import 'package:books/presentation/screens/splash_screen.dart';
-import 'package:books/presentation/screens/user/profile.dart';
+// ignore_for_file: depend_on_referenced_packages
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
+import 'package:books/domain/ports/book/book_repository.dart';
+import 'package:books/domain/ports/user/user_repository.dart';
+import 'package:books/domain/ports/interaction/comment_repository.dart';
 import 'package:books/domain/theme/app_theme.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
@@ -16,20 +17,25 @@ import 'package:books/infrastructure/adapters/book_repository_impl.dart';
 import 'package:books/infrastructure/adapters/user_repository_impl.dart';
 import 'package:books/infrastructure/adapters/comment_repository_impl.dart';
 import 'package:books/infrastructure/utils/shared_prefs_helper.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-// ignore: depend_on_referenced_packages
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart' as quill;
-import 'domain/ports/interaction/comment_repository.dart';
-import 'package:books/domain/ports/book/book_repository.dart';
-import 'package:books/domain/ports/user/user_repository.dart';
+import 'package:books/presentation/screens/splash_screen.dart';
+import 'package:books/presentation/screens/auth/login.dart';
+import 'package:books/presentation/screens/auth/register.dart';
+import 'package:books/presentation/screens/home.dart';
+import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/screens/user/profile.dart';
+import 'package:books/presentation/screens/book/write_book.dart';
+import 'package:books/presentation/screens/book/write_book_content.dart';
+import 'package:books/presentation/screens/book/read_contet.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+  // Imprime la API key para verificar
+  print("API Key de Gemini: ${dotenv.env['GEMINI_API_KEY']}");
+
   await SharedPrefsService().init();
 
   final userRepository = UserRepositoryImpl(SharedPrefsService());

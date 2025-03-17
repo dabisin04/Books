@@ -17,10 +17,10 @@ final ThemeData lightTheme = ThemeData(
   brightness: Brightness.light,
   primaryColor: lightRed,
   scaffoldBackgroundColor: offWhite,
-  appBarTheme: AppBarTheme(
+  appBarTheme: const AppBarTheme(
     backgroundColor: darkRed,
     elevation: 0,
-    titleTextStyle: const TextStyle(
+    titleTextStyle: TextStyle(
       fontWeight: FontWeight.bold,
       fontSize: 20,
       color: textDark,
@@ -43,22 +43,22 @@ final ThemeData lightTheme = ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: Colors.white.withOpacity(0.1),
-    border: OutlineInputBorder(
+    border: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: textLight),
     ),
-    focusedBorder: OutlineInputBorder(
+    focusedBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: lightRed, width: 2),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
+      borderRadius: const BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: textLight.withOpacity(0.5)),
     ),
     labelStyle: const TextStyle(color: textLight),
     hintStyle: TextStyle(color: textLight.withOpacity(0.7)),
   ),
-  dropdownMenuTheme: DropdownMenuThemeData(
+  dropdownMenuTheme: const DropdownMenuThemeData(
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
@@ -72,10 +72,10 @@ final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   primaryColor: lightRed,
   scaffoldBackgroundColor: darkGrey,
-  appBarTheme: AppBarTheme(
+  appBarTheme: const AppBarTheme(
     backgroundColor: darkRed,
     elevation: 0,
-    titleTextStyle: const TextStyle(
+    titleTextStyle: TextStyle(
       fontWeight: FontWeight.bold,
       fontSize: 20,
       color: textDark,
@@ -98,22 +98,22 @@ final ThemeData darkTheme = ThemeData(
   inputDecorationTheme: InputDecorationTheme(
     filled: true,
     fillColor: Colors.black.withOpacity(0.1),
-    border: OutlineInputBorder(
+    border: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: textDark),
     ),
-    focusedBorder: OutlineInputBorder(
+    focusedBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: lightRed, width: 2),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),
+      borderRadius: const BorderRadius.all(Radius.circular(inputBorderRadius)),
       borderSide: BorderSide(color: textDark.withOpacity(0.5)),
     ),
     labelStyle: const TextStyle(color: textDark),
     hintStyle: TextStyle(color: textDark.withOpacity(0.7)),
   ),
-  dropdownMenuTheme: DropdownMenuThemeData(
+  dropdownMenuTheme: const DropdownMenuThemeData(
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(inputBorderRadius)),

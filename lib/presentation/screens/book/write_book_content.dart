@@ -1,11 +1,19 @@
+// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api
+
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:flutter_quill/quill_delta.dart' as quill;
+import 'package:html/dom.dart' as dom;
+import 'package:html/parser.dart' show parse;
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
+import '../../../services/gemini_service.dart';
 import '../../widgets/book/custom_quill_tool_bar.dart';
+import '../../widgets/book/publication_date_selector.dart';
 import '../loading.dart';
 
 class WriteBookContentScreen extends StatefulWidget {
@@ -20,12 +28,18 @@ class WriteBookContentScreen extends StatefulWidget {
 class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   late final quill.QuillController _controller;
   DateTime? _selectedPublicationDate;
+  bool _isFetchingSuggestion = false;
+  quill.Delta? _previousDelta;
+  bool _showDiscardBanner = false;
+  int _suggestionStart = 0;
+  int _suggestionEnd = 0;
+  Timer? _discardBannerTimer;
 
   @override
   void initState() {
     super.initState();
+    context.read<BookBloc>().add(LoadBooks());
     _selectedPublicationDate = widget.book.publicationDate;
-    // Si existe contenido, se carga desde JSON; de lo contrario, se crea un documento vacío.
     if (widget.book.content != null && widget.book.content!.isNotEmpty) {
       try {
         final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));
@@ -43,22 +57,9 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
 
   @override
   void dispose() {
+    _discardBannerTimer?.cancel();
     _controller.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickPublicationDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedPublicationDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedPublicationDate = picked;
-      });
-    }
   }
 
   Future<void> _finishBookCreation() async {
@@ -91,71 +92,158 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
       ),
     );
 
-    // Redirigir a la pantalla de carga
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const LoadingScreen()),
     );
   }
 
-  void _showSaveModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Opciones de publicación",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Fecha de publicación:",
-                      style: TextStyle(fontSize: 16)),
-                  TextButton(
-                    onPressed: _pickPublicationDate,
-                    child: Text(
-                      _selectedPublicationDate != null
-                          ? _selectedPublicationDate!
-                              .toLocal()
-                              .toIso8601String()
-                              .substring(0, 10)
-                          : "Seleccionar",
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _finishBookCreation,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 32),
-                ),
-                child: const Text("Guardar",
-                    style: TextStyle(fontSize: 16, color: Colors.white)),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancelar"),
-              ),
-            ],
-          ),
-        );
-      },
+  quill.Delta htmlToDelta(String html) {
+    final document = parse(html);
+    final delta = quill.Delta();
+
+    void processNode(dom.Node node) {
+      if (node is dom.Text) {
+        delta.insert(node.text);
+      } else if (node is dom.Element) {
+        switch (node.localName) {
+          case 'p':
+            for (var child in node.nodes) {
+              processNode(child);
+            }
+            delta.insert('\n');
+            break;
+          case 'strong':
+          case 'b':
+            final attributes = {'bold': true};
+            for (var child in node.nodes) {
+              if (child is dom.Text) {
+                delta.insert(child.text, attributes);
+              } else {
+                processNode(child);
+              }
+            }
+            break;
+          case 'ul':
+            for (var child in node.nodes) {
+              if (child is dom.Element && child.localName == 'li') {
+                for (var liChild in child.nodes) {
+                  processNode(liChild);
+                }
+                delta.insert('\n', {'list': 'bullet'});
+              }
+            }
+            break;
+          case 'ol':
+            for (var child in node.nodes) {
+              if (child is dom.Element && child.localName == 'li') {
+                for (var liChild in child.nodes) {
+                  processNode(liChild);
+                }
+                delta.insert('\n', {'list': 'ordered'});
+              }
+            }
+            break;
+          default:
+            for (var child in node.nodes) {
+              processNode(child);
+            }
+            break;
+        }
+      }
+    }
+
+    for (var node in document.body!.nodes) {
+      processNode(node);
+    }
+
+    return delta;
+  }
+
+  Future<void> _getGeminiSuggestion(String promptInput) async {
+    setState(() {
+      _isFetchingSuggestion = true;
+    });
+    _previousDelta = _controller.document.toDelta();
+    final currentText = _controller.document.toPlainText().trim();
+    String prompt;
+    if (promptInput.isNotEmpty) {
+      prompt =
+          "Sin saludos ni encabezados, $promptInput. Utiliza el siguiente contenido:\n\n$currentText";
+    } else if (currentText.isNotEmpty) {
+      prompt =
+          "Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. Contenido actual:\n\n$currentText";
+    } else {
+      prompt =
+          "Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
+    }
+
+    try {
+      final suggestionText = await GeminiService.getSuggestion(prompt);
+      print('Respuesta de Gemini: $suggestionText');
+      String processedSuggestion = suggestionText.trim();
+      if (processedSuggestion.isNotEmpty) {
+        processedSuggestion = processedSuggestion[0].toLowerCase() +
+            processedSuggestion.substring(1);
+      }
+      final suggestionDelta = quill.Delta()..insert(processedSuggestion);
+      final currentLength = _controller.document.length;
+      _suggestionStart = currentLength;
+      if (currentLength <= 1) {
+        _controller.document.compose(suggestionDelta, quill.ChangeSource.local);
+      } else {
+        final retainDelta = quill.Delta()..retain(currentLength - 1);
+        final fullDelta = retainDelta.concat(suggestionDelta);
+        _controller.document.compose(fullDelta, quill.ChangeSource.local);
+      }
+      _suggestionEnd = _controller.document.length;
+      _controller.updateSelection(
+        TextSelection(
+            baseOffset: _suggestionStart, extentOffset: _suggestionEnd),
+        quill.ChangeSource.local,
+      );
+      setState(() {
+        _showDiscardBanner = true;
+      });
+      _discardBannerTimer?.cancel();
+      _discardBannerTimer = Timer(const Duration(seconds: 5), () {
+        _clearSelectionAndHideBanner();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error obteniendo sugerencia: $e")),
+      );
+    }
+    setState(() {
+      _isFetchingSuggestion = false;
+    });
+  }
+
+  void _clearSelectionAndHideBanner() {
+    _controller.updateSelection(
+      TextSelection.collapsed(offset: _controller.document.length),
+      quill.ChangeSource.local,
     );
+    if (mounted) {
+      setState(() {
+        _showDiscardBanner = false;
+      });
+    }
+  }
+
+  void _discardSuggestion() {
+    _discardBannerTimer?.cancel();
+    if (_previousDelta != null) {
+      _controller.document.replace(0, _controller.document.length, "");
+      _controller.document.compose(_previousDelta!, quill.ChangeSource.local);
+      _controller.updateSelection(
+        TextSelection.collapsed(offset: _controller.document.length),
+        quill.ChangeSource.local,
+      );
+      setState(() {
+        _showDiscardBanner = false;
+      });
+    }
   }
 
   @override
@@ -167,30 +255,72 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
           style: const TextStyle(fontSize: 16),
         ),
         toolbarHeight: 44,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _showSaveModal,
+            onPressed: _finishBookCreation,
           ),
         ],
       ),
-      body: quill.QuillEditor(
-        focusNode: FocusNode(),
-        scrollController: ScrollController(),
-        controller: _controller,
-        config: const quill.QuillEditorConfig(
-          scrollable: true,
-          padding: EdgeInsets.all(8.0),
-          autoFocus: true,
-          expands: false,
-          placeholder: 'Escribe tu contenido...',
-          // Puedes agregar otros parámetros si lo deseas
+      body: GestureDetector(
+        onTap: () {
+          if (_showDiscardBanner) {
+            _discardBannerTimer?.cancel();
+            _clearSelectionAndHideBanner();
+          }
+        },
+        child: Column(
+          children: [
+            PublicationDateSelector(
+              initialDate: _selectedPublicationDate,
+              onDateSelected: (selectedDate) {
+                setState(() {
+                  _selectedPublicationDate = selectedDate;
+                });
+              },
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  quill.QuillEditor(
+                    focusNode: FocusNode(),
+                    scrollController: ScrollController(),
+                    controller: _controller,
+                    config: const quill.QuillEditorConfig(
+                      scrollable: true,
+                      padding: EdgeInsets.all(8.0),
+                      autoFocus: true,
+                      expands: false,
+                      placeholder: 'Escribe tu contenido...',
+                    ),
+                  ),
+                  if (_showDiscardBanner)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: MaterialBanner(
+                        backgroundColor: Colors.amber.shade200,
+                        content: const Text("Sugerencia aplicada"),
+                        actions: [
+                          TextButton(
+                            onPressed: _discardSuggestion,
+                            child: const Text("Descartar"),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      bottomSheet: Container(
-        color: Colors.grey.shade200,
-        width: double.infinity,
-        child: CompactQuillToolbar(controller: _controller),
+      bottomNavigationBar: CustomQuillToolbar(
+        controller: _controller,
+        onSuggestionSubmit: _getGeminiSuggestion,
+        isFetching: _isFetchingSuggestion,
       ),
     );
   }

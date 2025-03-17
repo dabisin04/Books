@@ -6,7 +6,7 @@ import '../../screens/book/book_details.dart';
 class SmallBookCard extends StatelessWidget {
   final Book book;
 
-  const SmallBookCard({Key? key, required this.book}) : super(key: key);
+  const SmallBookCard({super.key, required this.book});
 
   LinearGradient _generateRandomGradient() {
     final random = Random();

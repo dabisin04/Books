@@ -33,12 +33,9 @@ class HamburguerMenu extends StatelessWidget {
             leading: const Icon(Icons.logout),
             title: const Text('Cerrar sesión'),
             onTap: () {
-              Navigator.pop(context); // Cierra el drawer
-              context
-                  .read<UserBloc>()
-                  .add(LogoutUser()); // Dispara el evento de cerrar sesión
-              Navigator.pushReplacementNamed(
-                  context, '/login'); // Redirige a login
+              Navigator.pop(context);
+              context.read<UserBloc>().add(LogoutUser());
+              Navigator.pushReplacementNamed(context, '/login');
             },
           ),
         ],

@@ -95,7 +95,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
           event.bookId, event.userId, event.rating.toDouble());
       final updatedBooks = (state as BookLoaded).books.map((book) {
         return book.id == event.bookId
-            ? book.copyWith(rating: event.rating.toDouble()) // Conversión aquí
+            ? book.copyWith(rating: event.rating.toDouble())
             : book;
       }).toList();
       emit(BookLoaded(updatedBooks));
@@ -151,35 +151,50 @@ class BookBloc extends Bloc<BookEvent, BookState> {
 
   Future<void> _onUpdateBookContent(
       UpdateBookContent event, Emitter<BookState> emit) async {
-    try {
-      await bookRepository.updateBookContent(event.bookId, event.content);
-      // Actualizamos la lista de libros, obteniendo todos nuevamente
-      final books = await bookRepository.fetchBooks();
-      emit(BookLoaded(books));
-    } catch (e, stackTrace) {
-      debugPrint('Error en _onUpdateBookContent: $e\n$stackTrace');
-      emit(const BookError("Error al actualizar contenido"));
+    if (state is BookLoaded) {
+      try {
+        await bookRepository.updateBookContent(event.bookId, event.content);
+
+        final updatedBooks = (state as BookLoaded).books.map((book) {
+          return book.id == event.bookId
+              ? book.copyWith(content: event.content)
+              : book;
+        }).toList();
+
+        emit(BookLoaded(updatedBooks));
+      } catch (e, stackTrace) {
+        debugPrint('Error en _onUpdateBookContent: $e\n$stackTrace');
+        emit(const BookError("Error al actualizar contenido"));
+      }
+    } else {
+      emit(const BookError("Estado inválido para actualizar contenido"));
     }
   }
 
   Future<void> _onUpdateBookPublicationDate(
       UpdateBookPublicationDate event, Emitter<BookState> emit) async {
-    try {
-      await bookRepository.updateBookPublicationDate(
-          event.bookId, event.publicationDate);
-      // Actualizar la lista de libros:
-      final updatedBooks = (state as BookLoaded).books.map((book) {
-        return book.id == event.bookId
-            ? book.copyWith(
-                publicationDate: event.publicationDate != null
-                    ? DateTime.tryParse(event.publicationDate!)
-                    : null)
-            : book;
-      }).toList();
-      emit(BookLoaded(updatedBooks));
-    } catch (e, stackTrace) {
-      debugPrint('Error en _onUpdateBookPublicationDate: $e\n$stackTrace');
-      emit(const BookError("Error al actualizar fecha de publicación"));
+    if (state is BookLoaded) {
+      try {
+        await bookRepository.updateBookPublicationDate(
+            event.bookId, event.publicationDate);
+
+        final updatedBooks = (state as BookLoaded).books.map((book) {
+          return book.id == event.bookId
+              ? book.copyWith(
+                  publicationDate: event.publicationDate != null
+                      ? DateTime.tryParse(event.publicationDate!)
+                      : null)
+              : book;
+        }).toList();
+
+        emit(BookLoaded(updatedBooks));
+      } catch (e, stackTrace) {
+        debugPrint('Error en _onUpdateBookPublicationDate: $e\n$stackTrace');
+        emit(const BookError("Error al actualizar fecha de publicación"));
+      }
+    } else {
+      emit(const BookError(
+          "Estado inválido para actualizar fecha de publicación"));
     }
   }
 
@@ -189,7 +204,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
       await bookRepository.updateBookDetails(
         event.bookId,
         title: event.title,
-        description: event.description, // Agregado
+        description: event.description,
         additionalGenres: event.additionalGenres,
         genre: event.genre,
       );
@@ -206,11 +221,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
             : book;
       }).toList();
 
-      final updatedBook =
-          updatedBooks.firstWhere((book) => book.id == event.bookId);
-
       emit(BookLoaded(updatedBooks));
-      emit(BookUpdated(updatedBook)); // Emitimos el libro modificado
     } catch (e, stackTrace) {
       debugPrint('Error en _onUpdateBookDetails: $e\n$stackTrace');
       emit(const BookError("Error al actualizar detalles del libro"));

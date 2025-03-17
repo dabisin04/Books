@@ -47,3 +47,12 @@ class BookUpdated extends BookState {
   @override
   List<Object?> get props => [book];
 }
+
+class BookDeleted extends BookState {
+  final String bookId;
+
+  const BookDeleted(this.bookId);
+
+  @override
+  List<Object?> get props => [bookId];
+}

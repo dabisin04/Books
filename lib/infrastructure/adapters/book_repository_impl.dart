@@ -18,12 +18,8 @@ class BookRepositoryImpl implements BookRepository {
   @override
   Future<void> addBook(Book book) async {
     final db = await _database;
-
-    // Asegurar que el libro tenga un ID único
     final String bookId = book.id.isEmpty ? const Uuid().v4() : book.id;
-
-    // Asegurar que el libro tenga un autor válido
-    if (book.authorId == null || book.authorId!.isEmpty) {
+    if (book.authorId.isEmpty) {
       throw Exception("Error: El libro debe tener un authorId válido.");
     }
 

@@ -1,7 +1,3 @@
-// ignore_for_file: library_private_types_in_public_api, prefer_const_constructors, sized_box_for_whitespace
-
-import 'package:books/presentation/screens/book/book_details.dart';
-import 'package:books/presentation/screens/user/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
@@ -9,18 +5,21 @@ import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
 import 'package:books/application/bloc/book/book_state.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
-import 'package:books/application/bloc/user/user_event.dart';
+import 'package:books/application/bloc/user/user_state.dart';
 import 'package:books/presentation/widgets/home/book_card.dart';
 import 'package:books/presentation/widgets/home/hamburguer_menu.dart';
 import 'package:books/presentation/widgets/home/recent_books_carousel.dart';
 import 'package:books/presentation/widgets/home/bottom_nav_bar.dart';
+import 'package:books/presentation/widgets/home/small_book_card.dart';
+import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/widgets/home/lazy_horizontal_book_list.dart';
+import 'dart:async';
 
-import '../../application/bloc/user/user_state.dart';
-import '../widgets/home/small_book_card.dart';
+import '../../application/bloc/user/user_event.dart';
+import 'user/profile.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
@@ -37,10 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<BookBloc>().add(LoadBooks());
   }
 
-  void didPopNext() {
-    context.read<BookBloc>().add(LoadBooks());
-  }
-
   @override
   void initState() {
     super.initState();
@@ -51,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null &&
@@ -95,15 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ..sort((a, b) => b.publicationDate!.compareTo(a.publicationDate!));
           final List<Book> mostRecentBooks = recentBooks.take(10).toList();
 
-          List<Book> bestRatedBooks;
-          if (publishedBooks.length > 5) {
-            bestRatedBooks =
-                publishedBooks.where((book) => (book.rating ?? 0) > 4).toList();
-          } else {
-            bestRatedBooks = List<Book>.from(publishedBooks)
-              ..sort((a, b) => b.rating!.compareTo(a.rating!));
-            bestRatedBooks = bestRatedBooks.take(3).toList();
-          }
+          // Solo libros con rating mayor a 4
+          final List<Book> bestRatedBooks =
+              publishedBooks.where((book) => (book.rating ?? 0) > 4).toList();
 
           final int totalViews =
               publishedBooks.fold(0, (prev, book) => prev + (book.views ?? 0));
@@ -114,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .where((book) =>
                   (book.views ?? 0) > 10 && (book.views ?? 0) > avgViews)
               .toList()
-            ..sort((a, b) => b.views!.compareTo(a.views!));
+            ..sort((a, b) => b.views.compareTo(a.views));
 
           final genreSections = _buildGenreSections(publishedBooks);
 
@@ -122,39 +110,61 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: Text("No hay libros publicados aún"));
           }
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (mostRecentBooks.isNotEmpty)
-                  RecentBooksCarousel(books: mostRecentBooks),
-                const SizedBox(height: 24.0),
-                if (bestRatedBooks.isNotEmpty)
-                  _buildHorizontalList(
-                    title: "Mejor Calificados",
-                    books: bestRatedBooks,
+          return RefreshIndicator(
+            onRefresh: () async {
+              context.read<BookBloc>().add(LoadBooks());
+              await Future.delayed(const Duration(seconds: 1));
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (mostRecentBooks.isNotEmpty)
+                    RecentBooksCarousel(books: mostRecentBooks),
+                  const SizedBox(height: 24.0),
+                  if (bestRatedBooks.isNotEmpty)
+                    LazyHorizontalBookList(
+                      title: "Mejor Calificados",
+                      books: bestRatedBooks,
+                      onTap: (book) => _navigateToBookDetails(book),
+                    ),
+                  const SizedBox(height: 24.0),
+                  if (mostViewedBooks.isNotEmpty)
+                    LazyHorizontalBookList(
+                      title: "Más Vistos",
+                      books: mostViewedBooks,
+                      onTap: (book) => _navigateToBookDetails(book),
+                    ),
+                  const SizedBox(height: 24.0),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      "Géneros",
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                const SizedBox(height: 24.0),
-                if (mostViewedBooks.isNotEmpty)
-                  _buildHorizontalList(
-                    title: "Más Vistos",
-                    books: mostViewedBooks,
+                  const SizedBox(height: 8.0),
+                  // Se usa un Padding y un Container con margin y padding interno para que los bordes se vean
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(8.0),
+                        child: genreSections,
+                      ),
+                    ),
                   ),
-                const SizedBox(height: 24.0),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text(
-                    "Géneros",
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 8.0),
-                Container(
-                  height: 240,
-                  child: genreSections,
-                ),
-              ],
+                  // Espacio extra al final para evitar overflow
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
           );
         } else if (state is BookError) {
@@ -196,38 +206,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHorizontalList(
-      {required String title, required List<Book> books}) {
-    if (books.isEmpty) return const SizedBox();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(title,
-              style:
-                  const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(height: 8.0),
-        SizedBox(
-          height: 180,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: books.length,
-            itemBuilder: (context, index) {
-              final book = books[index];
-              return GestureDetector(
-                onTap: () => _navigateToBookDetails(book),
-                child: BookCard(title: book.title, rating: book.rating),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildGenreSections(List<Book> books) {
     final genres = books.map((book) => book.genre).toSet();
     if (genres.isEmpty) return const SizedBox();
@@ -237,46 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
       children: genres.map((genre) {
         final booksInGenre = books.where((b) => b.genre == genre).toList();
         return Padding(
-          // Se añade un espacio extra en la parte inferior (16.0)
-          padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(8.0),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Título del género (más pequeño)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    genre,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                SizedBox(
-                  height: 120,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: booksInGenre.length,
-                    itemBuilder: (context, index) {
-                      final book = booksInGenre[index];
-                      return SmallBookCard(book: book);
-                    },
-                  ),
-                ),
-              ],
-            ),
+          padding: const EdgeInsets.fromLTRB(0, 8.0, 0, 16.0),
+          child: LazyHorizontalBookList(
+            title: genre,
+            books: booksInGenre,
+            onTap: (book) => _navigateToBookDetails(book),
           ),
         );
       }).toList(),

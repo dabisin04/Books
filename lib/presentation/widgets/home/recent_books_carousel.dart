@@ -7,7 +7,7 @@ import '../../screens/book/book_details.dart';
 class RecentBooksCarousel extends StatefulWidget {
   final List<Book> books;
 
-  const RecentBooksCarousel({Key? key, required this.books}) : super(key: key);
+  const RecentBooksCarousel({super.key, required this.books});
 
   @override
   _RecentBooksCarouselState createState() => _RecentBooksCarouselState();

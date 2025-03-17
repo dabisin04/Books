@@ -6,11 +6,11 @@ class EditableAnimatedInputField extends StatefulWidget {
   final String? Function(String?)? validator;
 
   const EditableAnimatedInputField({
-    Key? key,
+    super.key,
     required this.label,
     required this.controller,
     this.validator,
-  }) : super(key: key);
+  });
 
   @override
   _EditableAnimatedInputFieldState createState() =>
@@ -42,7 +42,7 @@ class _EditableAnimatedInputFieldState
       decoration: InputDecoration(
         labelText: widget.label,
         border: widget.controller.text.isEmpty
-            ? OutlineInputBorder()
+            ? const OutlineInputBorder()
             : InputBorder.none,
       ),
       validator: widget.validator,
