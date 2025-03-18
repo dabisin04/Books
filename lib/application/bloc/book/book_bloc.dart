@@ -22,6 +22,8 @@ class BookBloc extends Bloc<BookEvent, BookState> {
     on<UpdateBookContent>(_onUpdateBookContent);
     on<UpdateBookPublicationDate>(_onUpdateBookPublicationDate);
     on<UpdateBookDetails>(_onUpdateBookDetails);
+    on<TrashBook>(_onTrashBook);
+    on<GetTrashedBooksByAuthor>(_onGetTrashedBooksByAuthor);
   }
 
   Future<void> _onLoadBooks(LoadBooks event, Emitter<BookState> emit) async {
@@ -225,6 +227,34 @@ class BookBloc extends Bloc<BookEvent, BookState> {
     } catch (e, stackTrace) {
       debugPrint('Error en _onUpdateBookDetails: $e\n$stackTrace');
       emit(const BookError("Error al actualizar detalles del libro"));
+    }
+  }
+
+  Future<void> _onTrashBook(TrashBook event, Emitter<BookState> emit) async {
+    try {
+      await bookRepository.trashBook(event.bookId);
+      final updatedBooks = (state as BookLoaded)
+          .books
+          .where((book) => book.id != event.bookId)
+          .toList();
+      emit(BookLoaded(updatedBooks));
+    } catch (e, stackTrace) {
+      debugPrint('Error en _onTrashBook: $e\n$stackTrace');
+      emit(const BookError("Error al mover el libro a la papelera"));
+    }
+  }
+
+  Future<void> _onGetTrashedBooksByAuthor(
+      GetTrashedBooksByAuthor event, Emitter<BookState> emit) async {
+    emit(BookLoading());
+    try {
+      final books = await bookRepository.fetchBooks(trashed: true);
+      final trashedBooks =
+          books.where((book) => book.authorId == event.authorId).toList();
+      emit(BookLoaded(trashedBooks));
+    } catch (e, stackTrace) {
+      debugPrint('Error en _onGetTrashedBooksByAuthor: $e\n$stackTrace');
+      emit(const BookError("Error al cargar libros en papelera"));
     }
   }
 }

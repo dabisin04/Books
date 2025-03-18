@@ -8,6 +8,7 @@ class Comment extends Equatable {
   final String content;
   final String timestamp;
   final String? parentCommentId;
+  final String? rootCommentId;
   final int reports;
 
   static const Uuid _uuid = Uuid();
@@ -19,8 +20,11 @@ class Comment extends Equatable {
     required this.content,
     required this.timestamp,
     this.parentCommentId,
+    String? rootCommentId,
     this.reports = 0,
-  }) : id = id ?? _uuid.v4();
+  })  : id = id ?? _uuid.v4(),
+        rootCommentId = rootCommentId ??
+            (parentCommentId == null ? id ?? _uuid.v4() : null);
 
   Comment copyWith({
     String? id,
@@ -29,6 +33,7 @@ class Comment extends Equatable {
     String? content,
     String? timestamp,
     String? parentCommentId,
+    String? rootCommentId,
     int? reports,
   }) {
     return Comment(
@@ -38,6 +43,8 @@ class Comment extends Equatable {
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       parentCommentId: parentCommentId ?? this.parentCommentId,
+      rootCommentId: rootCommentId ??
+          this.rootCommentId, // Se mantiene la ID del comentario raíz
       reports: reports ?? this.reports,
     );
   }
@@ -50,6 +57,7 @@ class Comment extends Equatable {
       'content': content,
       'timestamp': timestamp,
       'parent_comment_id': parentCommentId,
+      'root_comment_id': rootCommentId, // Nuevo campo
       'reports': reports,
     };
   }
@@ -62,6 +70,7 @@ class Comment extends Equatable {
       content: map['content'],
       timestamp: map['timestamp'],
       parentCommentId: map['parent_comment_id'],
+      rootCommentId: map['root_comment_id'], // Nuevo campo
       reports: map['reports'],
     );
   }
@@ -74,6 +83,7 @@ class Comment extends Equatable {
         content,
         timestamp,
         parentCommentId,
+        rootCommentId, // Se incluye en `props`
         reports,
       ];
 }

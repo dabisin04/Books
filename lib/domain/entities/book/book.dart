@@ -16,6 +16,7 @@ class Book extends Equatable {
   final int ratingsCount;
   final int reports;
   final String? content;
+  final bool isTrashed;
 
   static const Uuid _uuid = Uuid();
 
@@ -33,6 +34,7 @@ class Book extends Equatable {
     this.ratingsCount = 0,
     this.reports = 0,
     this.content,
+    this.isTrashed = false,
   }) : id = id ?? _uuid.v4();
 
   /// Verifica si el libro ya fue publicado
@@ -57,6 +59,7 @@ class Book extends Equatable {
     int? ratingsCount,
     int? reports,
     String? content,
+    bool? isTrashed,
   }) {
     return Book(
       id: id ?? this.id,
@@ -72,6 +75,7 @@ class Book extends Equatable {
       ratingsCount: ratingsCount ?? this.ratingsCount,
       reports: reports ?? this.reports,
       content: content ?? this.content,
+      isTrashed: isTrashed ?? this.isTrashed,
     );
   }
 
@@ -91,6 +95,7 @@ class Book extends Equatable {
       'ratings_count': ratingsCount,
       'reports': reports,
       'content': content,
+      'is_trashed': isTrashed ? 1 : 0,
     };
   }
 
@@ -114,6 +119,7 @@ class Book extends Equatable {
       ratingsCount: map['ratings_count'] ?? 0,
       reports: map['reports'] ?? 0,
       content: map['content'],
+      isTrashed: map['is_trashed'] == 1,
     );
   }
 
@@ -132,5 +138,6 @@ class Book extends Equatable {
         ratingsCount,
         reports,
         content,
+        isTrashed,
       ];
 }

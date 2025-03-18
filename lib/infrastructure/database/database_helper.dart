@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -61,6 +61,7 @@ class DatabaseHelper {
         ratings_count INTEGER DEFAULT 0,
         reports INTEGER DEFAULT 0,
         content TEXT,
+        is_trashed INTEGER DEFAULT 0,
         FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
@@ -86,6 +87,7 @@ class DatabaseHelper {
       content TEXT NOT NULL,
       timestamp TEXT NOT NULL,
       parent_comment_id TEXT NULL,
+      root_comment_id TEXT NULL,
       reports INTEGER DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
@@ -156,9 +158,14 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Agrega la columna publication_date a la tabla books
       await db.execute('ALTER TABLE books ADD COLUMN publication_date TEXT');
     }
-    // Puedes añadir más migraciones aquí para versiones futuras
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE comments ADD COLUMN root_comment_id TEXT');
+    }
+    if (oldVersion < 4) {
+      await db
+          .execute('ALTER TABLE books ADD COLUMN is_trashed INTEGER DEFAULT 0');
+    }
   }
 }

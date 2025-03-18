@@ -1,4 +1,4 @@
-// ignore_for_file: use_build_context_synchronously, unused_element_parameter,library_private_types_in_public_api
+// ignore_for_file: use_build_context_synchronously, unused_element_parameter, library_private_types_in_public_api, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
@@ -34,10 +34,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           return const Center(child: CircularProgressIndicator());
         } else if (userState is UserAuthenticated) {
           return BlocProvider<BookBloc>(
-            create: (context) => BookBloc(
-              context.read<BookRepository>(),
-              context.read<UserRepository>(),
-            )..add(GetBooksByAuthor(userState.user.id)),
+            create: (context) {
+              final bloc = BookBloc(
+                context.read<BookRepository>(),
+                context.read<UserRepository>(),
+              );
+              bloc.add(GetBooksByAuthor(userState.user.id));
+              return bloc;
+            },
             child: _ProfileScreenContent(
               searchController: _searchController,
               selectedFilter: _selectedFilter,
@@ -45,6 +49,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 setState(() {
                   _selectedFilter = filter;
                 });
+                context
+                    .read<BookBloc>()
+                    .add(GetBooksByAuthor(userState.user.id));
               },
               user: userState.user,
             ),
@@ -85,6 +92,8 @@ class _ProfileScreenContent extends StatelessWidget {
           } else if (bookState is BookLoaded) {
             final allBooks = bookState.books;
             final query = searchController.text.toLowerCase();
+            List<Book> displayedBooks;
+
             final filteredBooks = query.isNotEmpty
                 ? allBooks
                     .where((book) => book.title.toLowerCase().contains(query))
@@ -95,14 +104,9 @@ class _ProfileScreenContent extends StatelessWidget {
             final unpublishedBooks =
                 filteredBooks.where((book) => !book.isPublished).toList();
 
-            List<Book> displayedBooks;
-            if (query.isNotEmpty) {
-              displayedBooks = filteredBooks;
-            } else if (selectedFilter == 'publicados') {
-              displayedBooks = publishedBooks;
-            } else {
-              displayedBooks = unpublishedBooks;
-            }
+            displayedBooks = selectedFilter == 'publicados'
+                ? publishedBooks
+                : unpublishedBooks;
 
             return Scaffold(
               floatingActionButton: FloatingActionButton.extended(
@@ -116,69 +120,97 @@ class _ProfileScreenContent extends StatelessWidget {
                   height: 24,
                   color: Colors.white,
                 ),
-                label: const Text(
-                  "Escribir",
-                  style: TextStyle(color: Colors.white),
-                ),
+                label: const Text("Escribir",
+                    style: TextStyle(color: Colors.white)),
               ),
               body: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding:
-                          const EdgeInsets.fromLTRB(16.0, 30.0, 16.0, 16.0),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.teal, Colors.greenAccent],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const CircleAvatar(
-                            radius: 40,
-                            backgroundColor: Colors.white,
-                            child: Icon(Icons.person,
-                                size: 40, color: Colors.grey),
+                    Stack(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding:
+                              const EdgeInsets.fromLTRB(16.0, 30.0, 16.0, 16.0),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.teal, Colors.greenAccent],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.username,
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Wrap(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const CircleAvatar(
+                                radius: 40,
+                                backgroundColor: Colors.white,
+                                child: Icon(Icons.person,
+                                    size: 40, color: Colors.grey),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      "ID: ${user.id}",
+                                      user.username,
                                       style: const TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.white70,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
                                       ),
+                                    ),
+                                    Wrap(
+                                      children: [
+                                        Text(
+                                          "ID: ${user.id}",
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
+                              ),
+                              CustomButton(
+                                text: 'Editar',
+                                onPressed: () {
+                                  // Navegar a la pantalla de edición de perfil
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          top: 2.0,
+                          right: 16.0,
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/trash');
+                            },
+                            icon: const Icon(Icons.delete,
+                                size: 16, color: Colors.white),
+                            label: const Text(
+                              "Papelera",
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.white),
+                            ),
+                            style: TextButton.styleFrom(
+                              backgroundColor:
+                                  Colors.redAccent.withOpacity(0.8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
                             ),
                           ),
-                          CustomButton(
-                            text: 'Editar',
-                            onPressed: () {
-                              // Navegar a la pantalla de edición de perfil
-                            },
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     // Barra de búsqueda
@@ -202,7 +234,7 @@ class _ProfileScreenContent extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Botones de filtro
+                    // Botones de filtro: Publicados y No Publicados
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Row(
@@ -280,13 +312,28 @@ class _ProfileScreenContent extends StatelessWidget {
                                   ),
                                   direction: DismissDirection.endToStart,
                                   onDismissed: (direction) {
-                                    context
-                                        .read<BookBloc>()
-                                        .add(DeleteBook(book.id));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text('Libro eliminado')),
-                                    );
+                                    if (selectedFilter == 'publicados' ||
+                                        selectedFilter == 'no_publicados') {
+                                      context
+                                          .read<BookBloc>()
+                                          .add(TrashBook(book.id));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Libro movido a la papelera')),
+                                      );
+                                    } else {
+                                      context
+                                          .read<BookBloc>()
+                                          .add(DeleteBook(book.id));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Libro eliminado definitivamente')),
+                                      );
+                                    }
                                   },
                                   child: GestureDetector(
                                     onTap: () {

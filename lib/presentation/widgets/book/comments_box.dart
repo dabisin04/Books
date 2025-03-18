@@ -1,5 +1,4 @@
 // ignore_for_file: library_private_types_in_public_api, use_super_parameters, curly_braces_in_flow_control_structures
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -103,112 +102,116 @@ class _CommentsBoxState extends State<CommentsBox> {
     return userId.substring(0, 1).toUpperCase() + userId.substring(1, 5);
   }
 
-  Widget _buildCommentTree(List<Comment> comments,
-      {String? parentId, int level = 0}) {
-    final double indent = level >= 1 ? 20.0 : 0.0;
-    final children =
-        comments.where((c) => c.parentCommentId == parentId).toList();
-    if (children.isEmpty) return const SizedBox();
+  Widget _buildCommentsList(List<Comment> comments) {
+    final topLevelComments =
+        comments.where((c) => c.parentCommentId == null).toList();
+    final Map<String, List<Comment>> repliesByRoot = {};
+    for (var comment in comments) {
+      if (comment.parentCommentId != null) {
+        final rootId = comment.rootCommentId;
+        if (rootId != null) {
+          repliesByRoot.putIfAbsent(rootId, () => []).add(comment);
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: children.map((comment) {
-        Comment? parentComment;
-        if (comment.parentCommentId != null) {
-          try {
-            parentComment =
-                comments.firstWhere((c) => c.id == comment.parentCommentId);
-          } catch (e) {
-            parentComment = null;
-          }
-        }
-        final replyText = parentComment != null
-            ? "@${_getUserName(parentComment.userId)} ${comment.content}"
-            : comment.content;
-        final bool isReply = level >= 1;
-        final currentUserState = context.watch<UserBloc>().state;
-        final bool isAuthor = currentUserState is UserAuthenticated &&
-            currentUserState.user.id == comment.userId;
-        return Padding(
-          padding: EdgeInsets.only(left: indent),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ListTile(
-                contentPadding: const EdgeInsets.only(left: 16.0, right: 8.0),
-                leading: CircleAvatar(
-                  child: Text(
-                    comment.userId.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-                title: CommentAuthor(userId: comment.userId),
-                subtitle: Text(
-                  isReply ? replyText : comment.content,
-                  softWrap: true,
-                  overflow: TextOverflow.visible,
-                ),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) => _onCommentAction(value, comment),
-                  itemBuilder: (context) {
-                    if (isAuthor) {
-                      return [
-                        const PopupMenuItem(
-                          value: 'editar',
-                          child: Text("Editar", style: TextStyle(fontSize: 12)),
-                        ),
-                        const PopupMenuItem(
-                          value: 'eliminar',
-                          child:
-                              Text("Eliminar", style: TextStyle(fontSize: 12)),
-                        ),
-                        if (level == 0)
-                          const PopupMenuItem(
-                            value: 'responder',
-                            child: Text("Responder",
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                      ];
-                    } else {
-                      if (level == 0)
-                        return [
-                          const PopupMenuItem(
-                            value: 'responder',
-                            child: Text("Responder",
-                                style: TextStyle(fontSize: 12)),
-                          ),
-                        ];
-                      return [];
-                    }
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 72.0, bottom: 4.0),
-                child: Row(
-                  children: [
-                    Text(
-                      _formatTimestamp(comment.timestamp),
-                      style: const TextStyle(fontSize: 10, color: Colors.grey),
-                    ),
-                    if (isReply)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8.0),
-                        child: Text(
-                          "Respuesta",
-                          style:
-                              TextStyle(fontSize: 10, color: Colors.blueGrey),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (level < 1)
-                _buildCommentTree(comments,
-                    parentId: comment.id, level: level + 1),
-            ],
-          ),
+      children: topLevelComments.map((topComment) {
+        final replies = repliesByRoot[topComment.id] ?? [];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCommentTile(topComment, indent: 0),
+            ...replies.map((reply) => _buildCommentTile(
+                  reply,
+                  indent: 20,
+                  prefixUsername: _getUserName(topComment.userId),
+                )),
+          ],
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildCommentTile(Comment comment,
+      {double indent = 0, String? prefixUsername}) {
+    final displayContent = prefixUsername != null
+        ? "@$prefixUsername ${comment.content}"
+        : comment.content;
+    final currentUserState = context.read<UserBloc>().state;
+    final bool isAuthor = currentUserState is UserAuthenticated &&
+        currentUserState.user.id == comment.userId;
+
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 16.0, right: 8.0),
+            leading: CircleAvatar(
+              child: Text(
+                comment.userId.substring(0, 1).toUpperCase(),
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+            title: CommentAuthor(userId: comment.userId),
+            subtitle: Text(
+              displayContent,
+              softWrap: true,
+              overflow: TextOverflow.visible,
+            ),
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) => _onCommentAction(value, comment),
+              itemBuilder: (context) {
+                if (isAuthor) {
+                  return [
+                    const PopupMenuItem(
+                      value: 'editar',
+                      child: Text("Editar", style: TextStyle(fontSize: 12)),
+                    ),
+                    const PopupMenuItem(
+                      value: 'eliminar',
+                      child: Text("Eliminar", style: TextStyle(fontSize: 12)),
+                    ),
+                    const PopupMenuItem(
+                      value: 'responder',
+                      child: Text("Responder", style: TextStyle(fontSize: 12)),
+                    ),
+                  ];
+                } else {
+                  return [
+                    const PopupMenuItem(
+                      value: 'responder',
+                      child: Text("Responder", style: TextStyle(fontSize: 12)),
+                    ),
+                  ];
+                }
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 72.0, bottom: 4.0),
+            child: Row(
+              children: [
+                Text(
+                  _formatTimestamp(comment.timestamp),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                if (comment.parentCommentId != null)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 8.0),
+                    child: Text(
+                      "Respuesta",
+                      style: TextStyle(fontSize: 10, color: Colors.blueGrey),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -269,7 +272,7 @@ class _CommentsBoxState extends State<CommentsBox> {
                 if (comments.isEmpty) {
                   return const Center(child: Text("No hay comentarios aún."));
                 }
-                return _buildCommentTree(comments);
+                return _buildCommentsList(comments);
               } else if (state is CommentError) {
                 return Center(child: Text(state.message));
               }

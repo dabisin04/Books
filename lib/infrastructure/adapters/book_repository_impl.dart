@@ -46,19 +46,51 @@ class BookRepositoryImpl implements BookRepository {
   }
 
   @override
-  Future<List<Book>> fetchBooks({String? filter, String? sortBy}) async {
-    final cachedData = await sharedPrefs.getValue(cacheKey);
+  Future<void> trashBook(String bookId) async {
+    final db = await _database;
+    await db.update(
+      'books',
+      {'is_trashed': 1},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+    await _cacheBooks();
+  }
 
+  @override
+  Future<void> restoreBook(String bookId) async {
+    final db = await _database;
+    await db.update(
+      'books',
+      {'is_trashed': 0},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+    await _cacheBooks();
+  }
+
+  @override
+  Future<List<Book>> fetchBooks(
+      {String? filter, String? sortBy, bool trashed = false}) async {
+    final cachedData = await sharedPrefs.getValue(cacheKey);
+    List<Book>? books;
     if (cachedData != null) {
       final List<dynamic> cachedList = jsonDecode(cachedData);
-      return cachedList.map((data) => Book.fromMap(data)).toList();
+      books = cachedList.map((data) => Book.fromMap(data)).toList();
+      books = books
+          .where((book) => book.toMap()['is_trashed'] == (trashed ? 1 : 0))
+          .toList();
+      if (books.isNotEmpty) return books;
     }
 
     final db = await _database;
-    List<Map<String, dynamic>> result = await db.query('books');
-    List<Book> books = result.map((map) => Book.fromMap(map)).toList();
+    List<Map<String, dynamic>> result = await db.query(
+      'books',
+      where: 'is_trashed = ?',
+      whereArgs: [trashed ? 1 : 0],
+    );
+    books = result.map((map) => Book.fromMap(map)).toList();
     await _cacheBooks();
-
     return books;
   }
 
@@ -95,8 +127,12 @@ class BookRepositoryImpl implements BookRepository {
       double avgRating = ratings.fold<double>(
               0, (sum, item) => sum + (item['rating'] as num).toDouble()) /
           ratings.length;
-      await db.update('books', {'rating': avgRating},
-          where: 'id = ?', whereArgs: [bookId]);
+      await db.update(
+        'books',
+        {'rating': avgRating},
+        where: 'id = ?',
+        whereArgs: [bookId],
+      );
     }
 
     await _cacheBooks();
@@ -107,7 +143,7 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query(
       'books',
-      where: 'title LIKE ?',
+      where: 'title LIKE ? AND is_trashed = 0',
       whereArgs: ['%$query%'],
     );
 
@@ -119,7 +155,7 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query(
       'books',
-      where: 'author_id = ?',
+      where: 'author_id = ? AND is_trashed = 0',
       whereArgs: [authorId],
     );
 
@@ -131,6 +167,7 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query(
       'books',
+      where: 'is_trashed = 0',
       orderBy: 'rating DESC',
       limit: 10,
     );
@@ -143,6 +180,7 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query(
       'books',
+      where: 'is_trashed = 0',
       orderBy: 'views DESC',
       limit: 10,
     );
@@ -185,7 +223,7 @@ class BookRepositoryImpl implements BookRepository {
     final values = <String, dynamic>{};
 
     if (title != null) values['title'] = title;
-    if (description != null) values['description'] = description; // Agregado
+    if (description != null) values['description'] = description;
     if (additionalGenres != null) {
       values['additional_genres'] = jsonEncode(additionalGenres);
     }

@@ -20,15 +20,31 @@ class CommentRepositoryImpl implements CommentRepository {
 
   @override
   Future<void> addComment(Comment comment) async {
-    final db = await _database;
-    final String commentId =
-        comment.id.isEmpty ? const Uuid().v4() : comment.id;
-    final newComment = comment.copyWith(id: commentId);
-    await db.insert(
-      'comments',
-      newComment.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final db = await DatabaseHelper.instance.database;
+
+    comment = comment.copyWith(id: comment.id ?? const Uuid().v4());
+
+    final rootCommentId = (comment.parentCommentId == null)
+        ? null
+        : (await db.query(
+              'comments',
+              columns: ['root_comment_id'],
+              where: 'id = ?',
+              whereArgs: [comment.parentCommentId],
+            ))
+                .firstOrNull?['root_comment_id'] as String? ??
+            comment.parentCommentId;
+
+    await db.insert('comments', {
+      'id': comment.id,
+      'user_id': comment.userId,
+      'book_id': comment.bookId,
+      'content': comment.content,
+      'timestamp': comment.timestamp,
+      'parent_comment_id': comment.parentCommentId,
+      'root_comment_id': rootCommentId,
+      'reports': comment.reports,
+    });
   }
 
   @override

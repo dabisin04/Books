@@ -109,3 +109,21 @@ class UpdateBookDetails extends BookEvent {
   List<Object?> get props =>
       [bookId, title, description, genre, additionalGenres];
 }
+
+class TrashBook extends BookEvent {
+  final String bookId;
+
+  const TrashBook(this.bookId);
+
+  @override
+  List<Object?> get props => [bookId];
+}
+
+class GetTrashedBooksByAuthor extends BookEvent {
+  final String authorId;
+
+  const GetTrashedBooksByAuthor(this.authorId);
+
+  @override
+  List<Object?> get props => [authorId];
+}
