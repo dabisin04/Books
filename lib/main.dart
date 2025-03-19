@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'package:books/application/bloc/user/user_event.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -26,6 +27,7 @@ import 'package:books/presentation/screens/user/profile.dart';
 import 'package:books/presentation/screens/book/write_book.dart';
 import 'package:books/presentation/screens/book/write_book_content.dart';
 import 'package:books/presentation/screens/book/read_contet.dart';
+import 'package:books/presentation/screens/book/thrash_bin.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -33,8 +35,6 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  // Imprime la API key para verificar
-  print("API Key de Gemini: ${dotenv.env['GEMINI_API_KEY']}");
 
   await SharedPrefsService().init();
 
@@ -78,7 +78,8 @@ class MyApp extends StatelessWidget {
       child: MultiBlocProvider(
         providers: [
           BlocProvider<UserBloc>(
-            create: (_) => UserBloc(userRepository: userRepository),
+            create: (_) => UserBloc(userRepository: userRepository)
+              ..add(CheckUserSession()),
           ),
           BlocProvider<BookBloc>(
             create: (_) => BookBloc(bookRepository, userRepository),
@@ -122,6 +123,7 @@ class MyApp extends StatelessWidget {
               final book = ModalRoute.of(context)!.settings.arguments as Book;
               return ReadBookContentScreen(book: book);
             },
+            '/trash': (context) => const TrashScreen(),
           },
         ),
       ),

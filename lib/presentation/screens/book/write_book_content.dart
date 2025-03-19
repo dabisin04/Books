@@ -40,9 +40,12 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     super.initState();
     context.read<BookBloc>().add(LoadBooks());
     _selectedPublicationDate = widget.book.publicationDate;
+
     if (widget.book.content != null && widget.book.content!.isNotEmpty) {
       try {
-        final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));
+        final List<dynamic> deltaOps = widget.book.content!['ops'];
+
+        final doc = quill.Document.fromJson(deltaOps);
         _controller = quill.QuillController(
           document: doc,
           selection: const TextSelection.collapsed(offset: 0),
@@ -63,16 +66,17 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   }
 
   Future<void> _finishBookCreation() async {
-    final String contentJson =
-        jsonEncode(_controller.document.toDelta().toJson());
+    final deltaJson = _controller.document.toDelta().toJson();
+    final contentMap = {'ops': deltaJson};
+
+    print("Contenido guardado en DB: ${jsonEncode(contentMap)}");
+
     final updatedBook = widget.book.copyWith(
-      content: contentJson,
+      content: contentMap,
       publicationDate: _selectedPublicationDate,
     );
 
-    context
-        .read<BookBloc>()
-        .add(UpdateBookContent(updatedBook.id, contentJson));
+    context.read<BookBloc>().add(UpdateBookContent(updatedBook.id, contentMap));
     if (_selectedPublicationDate != null) {
       context.read<BookBloc>().add(
             UpdateBookPublicationDate(
@@ -166,21 +170,33 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     });
     _previousDelta = _controller.document.toDelta();
     final currentText = _controller.document.toPlainText().trim();
+
+    // Incorporamos título y géneros al prompt
+    final bookTitle = widget.book.title;
+    final primaryGenre = widget.book.genre;
+    final additionalGenres = widget.book.additionalGenres.isNotEmpty
+        ? widget.book.additionalGenres.join(", ")
+        : "";
+
+    String genreInfo = "Género principal: $primaryGenre";
+    if (additionalGenres.isNotEmpty) {
+      genreInfo += ", Géneros adicionales: $additionalGenres";
+    }
+
     String prompt;
     if (promptInput.isNotEmpty) {
       prompt =
-          "Sin saludos ni encabezados, $promptInput. Utiliza el siguiente contenido:\n\n$currentText";
+          "El libro se titula \"$bookTitle\". $genreInfo. Sin saludos ni encabezados, $promptInput. Utiliza el siguiente contenido:\n\n$currentText";
     } else if (currentText.isNotEmpty) {
       prompt =
-          "Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. Contenido actual:\n\n$currentText";
+          "El libro se titula \"$bookTitle\". $genreInfo. Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. Contenido actual:\n\n$currentText";
     } else {
       prompt =
-          "Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
+          "El libro se titula \"$bookTitle\". $genreInfo. Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
     }
 
     try {
       final suggestionText = await GeminiService.getSuggestion(prompt);
-      print('Respuesta de Gemini: $suggestionText');
       String processedSuggestion = suggestionText.trim();
       if (processedSuggestion.isNotEmpty) {
         processedSuggestion = processedSuggestion[0].toLowerCase() +

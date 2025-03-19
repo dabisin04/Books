@@ -68,7 +68,7 @@ class GetBooksByAuthor extends BookEvent {
 
 class UpdateBookContent extends BookEvent {
   final String bookId;
-  final String content;
+  final Map<String, dynamic> content;
 
   const UpdateBookContent(this.bookId, this.content);
 
@@ -126,4 +126,13 @@ class GetTrashedBooksByAuthor extends BookEvent {
 
   @override
   List<Object?> get props => [authorId];
+}
+
+class RestoreBook extends BookEvent {
+  final String bookId;
+
+  const RestoreBook(this.bookId);
+
+  @override
+  List<Object?> get props => [bookId];
 }

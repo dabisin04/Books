@@ -5,7 +5,7 @@ import 'package:books/domain/entities/book/book.dart';
 class ProfileBookCard extends StatelessWidget {
   final Book book;
 
-  const ProfileBookCard({super.key, required this.book});
+  const ProfileBookCard({Key? key, required this.book}) : super(key: key);
 
   LinearGradient _generateRandomGradient() {
     final random = Random();
@@ -30,31 +30,31 @@ class ProfileBookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 150,
-      margin: const EdgeInsets.symmetric(horizontal: 8.0),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         gradient: _generateRandomGradient(),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 book.title,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
             Container(
-              width: 12,
-              height: 12,
+              width: 16,
+              height: 16,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: book.isPublished ? Colors.green : Colors.red,

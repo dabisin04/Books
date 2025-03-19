@@ -15,7 +15,7 @@ class Book extends Equatable {
   final double rating;
   final int ratingsCount;
   final int reports;
-  final String? content;
+  final Map<String, dynamic>? content; // Se almacena el Delta en forma de Map
   final bool isTrashed;
 
   static const Uuid _uuid = Uuid();
@@ -58,7 +58,7 @@ class Book extends Equatable {
     double? rating,
     int? ratingsCount,
     int? reports,
-    String? content,
+    Map<String, dynamic>? content,
     bool? isTrashed,
   }) {
     return Book(
@@ -94,7 +94,8 @@ class Book extends Equatable {
       'rating': rating,
       'ratings_count': ratingsCount,
       'reports': reports,
-      'content': content,
+      // Se codifica el contenido (Delta) a un JSON string
+      'content': content != null ? jsonEncode(content) : null,
       'is_trashed': isTrashed ? 1 : 0,
     };
   }
@@ -118,7 +119,10 @@ class Book extends Equatable {
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       ratingsCount: map['ratings_count'] ?? 0,
       reports: map['reports'] ?? 0,
-      content: map['content'],
+      // Se decodifica el JSON en un Map
+      content: map['content'] != null
+          ? jsonDecode(map['content']) as Map<String, dynamic>
+          : null,
       isTrashed: map['is_trashed'] == 1,
     );
   }

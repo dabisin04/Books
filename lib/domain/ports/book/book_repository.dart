@@ -11,7 +11,7 @@ abstract class BookRepository {
   Future<List<Book>> getBooksByAuthor(String authorId);
   Future<List<Book>> getTopRatedBooks();
   Future<List<Book>> getMostViewedBooks();
-  Future<void> updateBookContent(String bookId, String content);
+  Future<void> updateBookContent(String bookId, Map<String, dynamic> content);
   Future<void> updateBookPublicationDate(
       String bookId, String? publicationDate);
   Future<void> updateBookDetails(String bookId,

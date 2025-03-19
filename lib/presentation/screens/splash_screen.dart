@@ -9,18 +9,17 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Future.delayed(const Duration(seconds: 2), () {
-      final userState = context.read<UserBloc>().state;
-      if (userState is UserAuthenticated) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    });
-
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
+    return BlocListener<UserBloc, UserState>(
+      listener: (context, state) async {
+        await Future.delayed(const Duration(seconds: 2));
+        if (state is UserAuthenticated) {
+          Navigator.pushReplacementNamed(context, '/home');
+        } else if (state is UserUnauthenticated) {
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+      },
+      child: const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       ),
     );
   }

@@ -2,9 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/widgets/global/custom_button.dart';
 import 'package:books/presentation/screens/book/book_details.dart';
-import 'package:books/presentation/screens/user/widgets/profile_book_card.dart';
 import '../../../application/bloc/book/book_bloc.dart';
 import '../../../application/bloc/book/book_event.dart';
 import '../../../application/bloc/book/book_state.dart';
@@ -12,6 +10,8 @@ import '../../../application/bloc/user/user_bloc.dart';
 import '../../../application/bloc/user/user_state.dart';
 import '../../../domain/ports/book/book_repository.dart';
 import '../../../domain/ports/user/user_repository.dart';
+import 'package:books/presentation/widgets/global/custom_button.dart';
+import '../../widgets/book/book_list.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -109,19 +109,18 @@ class _ProfileScreenContent extends StatelessWidget {
                 : unpublishedBooks;
 
             return Scaffold(
-              floatingActionButton: FloatingActionButton.extended(
+              floatingActionButton: FloatingActionButton(
+                mini: true,
                 onPressed: () {
                   Navigator.pushNamed(context, '/write_book');
                 },
                 backgroundColor: Colors.redAccent,
-                icon: Image.asset(
+                child: Image.asset(
                   'images/pluma.png',
-                  width: 24,
-                  height: 24,
+                  width: 20,
+                  height: 20,
                   color: Colors.white,
                 ),
-                label: const Text("Escribir",
-                    style: TextStyle(color: Colors.white)),
               ),
               body: SingleChildScrollView(
                 child: Column(
@@ -132,7 +131,7 @@ class _ProfileScreenContent extends StatelessWidget {
                         Container(
                           width: double.infinity,
                           padding:
-                              const EdgeInsets.fromLTRB(16.0, 30.0, 16.0, 16.0),
+                              const EdgeInsets.fromLTRB(16.0, 74.0, 16.0, 16.0),
                           decoration: const BoxDecoration(
                             gradient: LinearGradient(
                               colors: [Colors.teal, Colors.greenAccent],
@@ -178,42 +177,37 @@ class _ProfileScreenContent extends StatelessWidget {
                               ),
                               CustomButton(
                                 text: 'Editar',
-                                onPressed: () {
-                                  // Navegar a la pantalla de edición de perfil
-                                },
+                                onPressed: () {},
                               ),
                             ],
                           ),
                         ),
                         Positioned(
-                          top: 2.0,
+                          top: 24.0,
                           right: 16.0,
-                          child: TextButton.icon(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/trash');
-                            },
-                            icon: const Icon(Icons.delete,
-                                size: 16, color: Colors.white),
-                            label: const Text(
-                              "Papelera",
-                              style:
-                                  TextStyle(fontSize: 12, color: Colors.white),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            style: TextButton.styleFrom(
-                              backgroundColor:
-                                  Colors.redAccent.withOpacity(0.8),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                            child: IconButton(
+                              icon: const Icon(Icons.delete,
+                                  size: 16, color: Colors.white),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
                               ),
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/trash');
+                              },
+                              tooltip: "Papelera",
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Barra de búsqueda
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: TextField(
@@ -234,7 +228,6 @@ class _ProfileScreenContent extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Botones de filtro: Publicados y No Publicados
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Row(
@@ -270,7 +263,6 @@ class _ProfileScreenContent extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Título de la categoría
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Text(
@@ -284,80 +276,35 @@ class _ProfileScreenContent extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Lista de libros filtrados
-                    displayedBooks.isEmpty
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 20.0),
-                              child: Text("No hay libros en esta categoría"),
-                            ),
-                          )
-                        : Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: displayedBooks.length,
-                              itemBuilder: (context, index) {
-                                final book = displayedBooks[index];
-                                return Dismissible(
-                                  key: ValueKey(book.id),
-                                  background: Container(
-                                    color: Colors.redAccent,
-                                    alignment: Alignment.centerRight,
-                                    padding: const EdgeInsets.only(right: 20.0),
-                                    child: const Icon(Icons.delete,
-                                        color: Colors.white),
-                                  ),
-                                  direction: DismissDirection.endToStart,
-                                  onDismissed: (direction) {
-                                    if (selectedFilter == 'publicados' ||
-                                        selectedFilter == 'no_publicados') {
-                                      context
-                                          .read<BookBloc>()
-                                          .add(TrashBook(book.id));
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Libro movido a la papelera')),
-                                      );
-                                    } else {
-                                      context
-                                          .read<BookBloc>()
-                                          .add(DeleteBook(book.id));
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text(
-                                                'Libro eliminado definitivamente')),
-                                      );
-                                    }
-                                  },
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              BookDetailsScreen(book: book),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 8.0),
-                                      child: ProfileBookCard(book: book),
-                                    ),
-                                  ),
-                                );
-                              },
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(height: 12),
-                            ),
+                    BooksListWidget(
+                      books: displayedBooks,
+                      isTrash: false,
+                      onBookTap: (book) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => BookDetailsScreen(book: book),
                           ),
+                        );
+                      },
+                      onDismiss: (book) {
+                        if (selectedFilter == 'publicados' ||
+                            selectedFilter == 'no_publicados') {
+                          context.read<BookBloc>().add(TrashBook(book.id));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Libro movido a la papelera')),
+                          );
+                        } else {
+                          context.read<BookBloc>().add(DeleteBook(book.id));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('Libro eliminado definitivamente')),
+                          );
+                        }
+                      },
+                    ),
                     const SizedBox(height: 60),
                   ],
                 ),

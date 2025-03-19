@@ -1,3 +1,4 @@
+import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/ports/user/user_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
@@ -24,6 +25,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
     on<UpdateBookDetails>(_onUpdateBookDetails);
     on<TrashBook>(_onTrashBook);
     on<GetTrashedBooksByAuthor>(_onGetTrashedBooksByAuthor);
+    on<RestoreBook>(_onRestoreBook);
   }
 
   Future<void> _onLoadBooks(LoadBooks event, Emitter<BookState> emit) async {
@@ -255,6 +257,31 @@ class BookBloc extends Bloc<BookEvent, BookState> {
     } catch (e, stackTrace) {
       debugPrint('Error en _onGetTrashedBooksByAuthor: $e\n$stackTrace');
       emit(const BookError("Error al cargar libros en papelera"));
+    }
+  }
+
+  Future<void> _onRestoreBook(
+      RestoreBook event, Emitter<BookState> emit) async {
+    try {
+      await bookRepository.restoreBook(event.bookId);
+      if (state is BookLoaded) {
+        final currentBooks = (state as BookLoaded).books;
+        Book? restoredBook;
+        try {
+          restoredBook = currentBooks.firstWhere((b) => b.id == event.bookId);
+        } catch (_) {
+          restoredBook = null;
+        }
+        final updatedBooks =
+            currentBooks.where((b) => b.id != event.bookId).toList();
+        if (restoredBook != null) {
+          emit(BookRestored(restoredBook));
+        }
+        emit(BookLoaded(updatedBooks));
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Error en _onRestoreBook: $e\n$stackTrace');
+      emit(const BookError("Error al restaurar el libro"));
     }
   }
 }

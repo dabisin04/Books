@@ -25,8 +25,8 @@ class BookRepositoryImpl implements BookRepository {
 
     final newBook = book.copyWith(
       id: bookId,
-      views: book.views ?? 0,
-      content: book.content ?? '',
+      views: book.views,
+      content: book.content ?? {},
     );
 
     await db.insert(
@@ -189,11 +189,12 @@ class BookRepositoryImpl implements BookRepository {
   }
 
   @override
-  Future<void> updateBookContent(String bookId, String content) async {
+  Future<void> updateBookContent(
+      String bookId, Map<String, dynamic> content) async {
     final db = await _database;
     await db.update(
       'books',
-      {'content': content},
+      {'content': jsonEncode(content)},
       where: 'id = ?',
       whereArgs: [bookId],
     );

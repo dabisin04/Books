@@ -1,14 +1,13 @@
-// ignore_for_file: deprecated_member_use, use_super_parameters, library_private_types_in_public_api
+// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
-
-import '../../../application/bloc/book/book_bloc.dart';
+import 'package:books/application/bloc/book/book_bloc.dart';
 import '../../../application/bloc/book/book_event.dart';
 import '../../widgets/book/comments_modal.dart';
+import '../../widgets/book/paginated_book_viewer.dart';
 
 class ReadBookContentScreen extends StatefulWidget {
   final Book book;
@@ -19,9 +18,7 @@ class ReadBookContentScreen extends StatefulWidget {
 }
 
 class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
-  late final quill.QuillController _controller;
-  final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
+  late final quill.Document _document;
 
   @override
   void initState() {
@@ -29,27 +26,26 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<BookBloc>().add(UpdateBookViews(widget.book.id));
     });
+
+    debugPrint(
+        "Contenido recibido en ReadBookContentScreen: ${widget.book.content}");
     if (widget.book.content != null && widget.book.content!.isNotEmpty) {
       try {
-        final doc = quill.Document.fromJson(jsonDecode(widget.book.content!));
-        _controller = quill.QuillController(
-          document: doc,
-          selection: const TextSelection.collapsed(offset: 0),
-        );
+        final List<dynamic>? ops = widget.book.content!['ops'];
+        if (ops == null) {
+          debugPrint("Error: 'ops' es null o no está definido.");
+          _document = quill.Document();
+        } else {
+          _document = quill.Document.fromJson(ops);
+        }
       } catch (e) {
-        _controller = quill.QuillController.basic();
+        debugPrint("Error al cargar contenido del libro: $e");
+        _document = quill.Document();
       }
     } else {
-      _controller = quill.QuillController.basic();
+      debugPrint("Error: El contenido del libro está vacío o es null.");
+      _document = quill.Document();
     }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
-    _focusNode.dispose();
-    super.dispose();
   }
 
   void _openCommentsModal() {
@@ -139,6 +135,9 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final dynamicFontSize = screenHeight * 0.022;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -149,12 +148,9 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: IgnorePointer(
-        child: quill.QuillEditor(
-          controller: _controller,
-          scrollController: _scrollController,
-          focusNode: _focusNode,
-        ),
+      body: PaginatedBookViewer(
+        document: _document,
+        fontSize: dynamicFontSize,
       ),
       bottomNavigationBar: Container(
         color: Colors.white,

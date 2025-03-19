@@ -26,11 +26,12 @@ dependencies:
   markdown: ^7.3.0
   html: ^0.15.5
   flutter_launcher_icons: ^0.14.3
+  turn_page_transition: ^0.4.0
 
 flutter_icons:
   android: true
   ios: true
-  image_path: "images/Designer.PNG"
+  image_path: "images/logo.png"
 
 dev_dependencies:
   flutter_test:
@@ -43,3 +44,4 @@ flutter:
     - .env
     - images/pluma.png
     - images/Designer.PNG
+    - images/logo.png

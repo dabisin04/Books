@@ -56,3 +56,10 @@ class BookDeleted extends BookState {
   @override
   List<Object?> get props => [bookId];
 }
+
+class BookRestored extends BookState {
+  final Book book;
+  const BookRestored(this.book);
+  @override
+  List<Object?> get props => [book];
+}
