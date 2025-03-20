@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/presentation/screens/book/write_book_content.dart';
+import 'package:books/presentation/screens/book/write_book_chapter.dart';
 import 'package:books/presentation/widgets/global/custom_button.dart';
 import '../../../application/bloc/book/book_bloc.dart';
 import '../../../application/bloc/book/book_event.dart';
@@ -37,6 +38,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   String? _selectedMainGenre;
   List<String> _selectedAdditionalGenres = [];
+  bool _hasChapters = false;
 
   LinearGradient _currentGradient = _generateRandomGradient();
 
@@ -70,11 +72,11 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                 : _descriptionController.text.trim(),
             genre: _selectedMainGenre ?? widget.book!.genre,
             additionalGenres: _selectedAdditionalGenres,
+            has_chapters: _hasChapters,
           ) ??
           Book(
             title: _titleController.text.trim(),
-            authorId:
-                "currentUserId", // Aquí deberías obtener el id del usuario actual
+            authorId: "currentUserId", // Obtener el id del usuario actual
             description: _descriptionController.text.trim().isEmpty
                 ? null
                 : _descriptionController.text.trim(),
@@ -87,6 +89,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
             ratingsCount: 0,
             reports: 0,
             content: null,
+            has_chapters: _hasChapters,
           );
 
       if (widget.book != null) {
@@ -101,10 +104,13 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
         context.read<BookBloc>().add(AddBook(updatedBook));
       }
 
+      // Redirigir a la pantalla correspondiente según la opción de capítulos:
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => WriteBookContentScreen(book: updatedBook),
+          builder: (context) => _hasChapters
+              ? WriteChapterScreen(book: updatedBook)
+              : WriteBookContentScreen(book: updatedBook),
         ),
       );
     }
@@ -118,6 +124,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       _descriptionController.text = widget.book!.description ?? '';
       _selectedMainGenre = widget.book!.genre;
       _selectedAdditionalGenres = widget.book!.additionalGenres;
+      _hasChapters = widget.book!.has_chapters;
     }
     _titleController.addListener(_onTitleChanged);
     _descriptionController.addListener(() {
@@ -187,7 +194,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Si el usuario decide volver atrás, redirigimos a la pantalla de carga.
+        // Si el usuario decide volver atrás, redirige a la pantalla de carga.
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/splash',
@@ -198,21 +205,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       },
       child: BlocListener<BookBloc, BookState>(
         listener: (context, state) {
-          if (state is BookAdded) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WriteBookContentScreen(book: state.book),
-              ),
-            );
-          } else if (state is BookUpdated) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => WriteBookContentScreen(book: state.book),
-              ),
-            );
-          }
+          // La navegación se realiza desde _goToContentScreen.
         },
         child: Scaffold(
           appBar: AppBar(
@@ -225,7 +218,9 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
               key: _formKey,
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Sección para la portada
                     Row(
                       children: [
                         AnimatedContainer(
@@ -262,6 +257,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    // Campo para descripción
                     TextFormField(
                       controller: _descriptionController,
                       decoration: InputDecoration(
@@ -273,6 +269,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
+                    // Selector de género principal
                     DropdownButtonFormField<String>(
                       value: _selectedMainGenre,
                       decoration: InputDecoration(
@@ -297,6 +294,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                           : null,
                     ),
                     const SizedBox(height: 16),
+                    // Selector de géneros adicionales
                     GestureDetector(
                       onTap: _selectAdditionalGenres,
                       child: InputDecorator(
@@ -312,6 +310,21 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                               : _selectedAdditionalGenres.join(', '),
                           style: const TextStyle(fontSize: 16),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Nuevo widget para indicar si el libro tendrá capítulos
+                    SwitchListTile(
+                      title: const Text("¿El libro tendrá capítulos?"),
+                      value: _hasChapters,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _hasChapters = value;
+                        });
+                      },
+                      secondary: Icon(
+                        _hasChapters ? Icons.list : Icons.text_snippet,
+                        color: Theme.of(context).primaryColor,
                       ),
                     ),
                     const SizedBox(height: 24),

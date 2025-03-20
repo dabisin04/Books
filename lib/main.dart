@@ -1,6 +1,11 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/user/user_event.dart';
+import 'package:books/domain/entities/book/chapter.dart';
+import 'package:books/domain/ports/book/chapter_repository.dart';
+import 'package:books/infrastructure/adapters/chapter_repository_impl.dart';
+import 'package:books/presentation/screens/book/write_book_chapter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -41,11 +46,13 @@ Future<void> main() async {
   final userRepository = UserRepositoryImpl(SharedPrefsService());
   final bookRepository = BookRepositoryImpl(SharedPrefsService());
   final commentRepository = CommentRepositoryImpl(SharedPrefsService());
+  final chapterRepository = ChapterRepositoryImpl();
 
   runApp(MyApp(
     userRepository: userRepository,
     bookRepository: bookRepository,
     commentRepository: commentRepository,
+    chapterRepository: chapterRepository,
   ));
 }
 
@@ -53,12 +60,14 @@ class MyApp extends StatelessWidget {
   final UserRepositoryImpl userRepository;
   final BookRepositoryImpl bookRepository;
   final CommentRepository commentRepository;
+  final ChapterRepositoryImpl chapterRepository;
 
   const MyApp({
     super.key,
     required this.userRepository,
     required this.bookRepository,
     required this.commentRepository,
+    required this.chapterRepository,
   });
 
   @override
@@ -74,6 +83,9 @@ class MyApp extends StatelessWidget {
         RepositoryProvider<CommentRepository>(
           create: (_) => commentRepository,
         ),
+        RepositoryProvider<ChapterRepository>(
+          create: (_) => chapterRepository,
+        )
       ],
       child: MultiBlocProvider(
         providers: [
@@ -87,6 +99,8 @@ class MyApp extends StatelessWidget {
           BlocProvider<CommentBloc>(
             create: (_) => CommentBloc(commentRepository),
           ),
+          BlocProvider<ChapterBloc>(
+              create: (_) => ChapterBloc(chapterRepository: chapterRepository))
         ],
         child: MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
@@ -119,9 +133,16 @@ class MyApp extends StatelessWidget {
               final book = ModalRoute.of(context)!.settings.arguments as Book;
               return WriteBookContentScreen(book: book);
             },
+            '/write_chapter': (context) {
+              final args = ModalRoute.of(context)!.settings.arguments
+                  as Map<String, dynamic>;
+              final book = args['book'] as Book;
+              final chapter = args['chapter'] as Chapter?;
+              return WriteChapterScreen(book: book, chapter: chapter);
+            },
             '/read_content': (context) {
-              final book = ModalRoute.of(context)!.settings.arguments as Book;
-              return ReadBookContentScreen(book: book);
+              final contentEntity = ModalRoute.of(context)!.settings.arguments;
+              return ReadBookContentScreen(contentEntity: contentEntity);
             },
             '/trash': (context) => const TrashScreen(),
           },

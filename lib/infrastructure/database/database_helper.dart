@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -62,7 +62,25 @@ class DatabaseHelper {
         reports INTEGER DEFAULT 0,
         content TEXT,
         is_trashed INTEGER DEFAULT 0,
+        has_chapters INTEGER DEFAULT 0,
         FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE chapters(
+        id TEXT PRIMARY KEY,
+        book_id TEXT NOT NULL,
+        title TEXT,
+        content TEXT,
+        upload_date TEXT NOT NULL,
+        publication_date TEXT,
+        chapter_number INTEGER,  -- Para guardar el orden, opcional
+        views INTEGER DEFAULT 0,
+        rating REAL DEFAULT 0,
+        ratings_count INTEGER DEFAULT 0,
+        reports INTEGER DEFAULT 0,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
 
@@ -166,6 +184,10 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await db
           .execute('ALTER TABLE books ADD COLUMN is_trashed INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 5) {
+      await db.execute(
+          'ALTER TABLE books ADD COLUMN has_chapters INTEGER DEFAULT 0');
     }
   }
 }

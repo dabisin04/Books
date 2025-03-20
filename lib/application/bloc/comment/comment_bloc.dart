@@ -20,7 +20,16 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
       AddComment event, Emitter<CommentState> emit) async {
     try {
       await commentRepository.addComment(event.comment);
-      emit(CommentAdded(event.comment));
+      if (state is CommentLoaded) {
+        final currentComments = (state as CommentLoaded).comments;
+        final updatedComments = List<Comment>.from(currentComments)
+          ..insert(0, event.comment);
+        emit(CommentLoaded(updatedComments));
+      } else {
+        final comments =
+            await commentRepository.fetchCommentsByBook(event.comment.bookId);
+        emit(CommentLoaded(comments));
+      }
     } catch (e, stackTrace) {
       debugPrint('Error in _onAddComment: $e\n$stackTrace');
       emit(CommentError('Error al agregar comentario: $e'));

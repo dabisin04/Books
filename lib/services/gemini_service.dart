@@ -4,15 +4,13 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 class GeminiService {
   static final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? "";
 
-  // Obtiene sugerencias usando la librería google_generative_ai
   static Future<String> getSuggestion(String prompt) async {
     if (_apiKey.isEmpty) {
       throw Exception("API Key de Gemini no encontrada en .env");
     }
 
-    // Crea el modelo con la configuración deseada
     final model = GenerativeModel(
-      model: 'gemini-2.0-flash', // O el modelo que corresponda
+      model: 'gemini-2.0-flash',
       apiKey: _apiKey,
       generationConfig: GenerationConfig(
         temperature: 0.7,
@@ -23,21 +21,41 @@ class GeminiService {
       ),
     );
 
-    // Inicia un chat sin historial
     final chat = model.startChat(history: []);
-
-    // Prepara el contenido a partir del prompt
     final content = Content.text(prompt);
 
     try {
-      // Envía el mensaje y obtiene la respuesta
       final response = await chat.sendMessage(content);
-      // Imprime la respuesta para depuración
-      print("Respuesta de Gemini: ${response.text}");
       return response.text ?? "Sin respuesta";
     } catch (e) {
-      print("Error en la API de Gemini: $e");
       throw Exception("Error en la API de Gemini: $e");
     }
+  }
+
+  static Future<String> getBookSuggestion({
+    required String title,
+    required String primaryGenre,
+    List<String>? additionalGenres,
+    required String userPrompt,
+    required String currentContent,
+  }) async {
+    String genreInfo = "Género principal: $primaryGenre";
+    if (additionalGenres != null && additionalGenres.isNotEmpty) {
+      genreInfo += ", Géneros adicionales: ${additionalGenres.join(", ")}";
+    }
+
+    String finalPrompt;
+    if (userPrompt.isNotEmpty) {
+      finalPrompt =
+          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, $userPrompt. Utiliza el siguiente contenido:\n\n$currentContent";
+    } else if (currentContent.isNotEmpty) {
+      finalPrompt =
+          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. Contenido actual:\n\n$currentContent";
+    } else {
+      finalPrompt =
+          "El libro se titula \"$title\". $genreInfo. Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
+    }
+
+    return getSuggestion(finalPrompt);
   }
 }

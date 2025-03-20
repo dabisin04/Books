@@ -14,8 +14,9 @@ import 'package:books/application/bloc/user/user_state.dart';
 enum CommentMode { add, edit, reply }
 
 class CommentsModal extends StatefulWidget {
-  final String bookId;
-  const CommentsModal({super.key, required this.bookId});
+  final String targetId; // Puede ser el id del libro o del capítulo
+  final String? targetType; // Ejemplo: "book" o "chapter" (opcional)
+  const CommentsModal({super.key, required this.targetId, this.targetType});
 
   @override
   _CommentsModalState createState() => _CommentsModalState();
@@ -29,7 +30,7 @@ class _CommentsModalState extends State<CommentsModal> {
   @override
   void initState() {
     super.initState();
-    context.read<CommentBloc>().add(FetchCommentsByBook(widget.bookId));
+    context.read<CommentBloc>().add(FetchCommentsByBook(widget.targetId));
   }
 
   @override
@@ -54,7 +55,7 @@ class _CommentsModalState extends State<CommentsModal> {
     if (_commentMode == CommentMode.add) {
       final comment = Comment(
         userId: currentUserState.user.id,
-        bookId: widget.bookId,
+        bookId: widget.targetId,
         content: text,
         timestamp: DateTime.now().toIso8601String(),
       );
@@ -64,7 +65,7 @@ class _CommentsModalState extends State<CommentsModal> {
     } else if (_commentMode == CommentMode.reply && _targetCommentId != null) {
       final reply = Comment(
         userId: currentUserState.user.id,
-        bookId: widget.bookId,
+        bookId: widget.targetId,
         content: text,
         timestamp: DateTime.now().toIso8601String(),
         parentCommentId: _targetCommentId,
@@ -72,7 +73,7 @@ class _CommentsModalState extends State<CommentsModal> {
       context.read<CommentBloc>().add(AddComment(reply));
     }
     _cancelCommentMode();
-    context.read<CommentBloc>().add(FetchCommentsByBook(widget.bookId));
+    context.read<CommentBloc>().add(FetchCommentsByBook(widget.targetId));
   }
 
   String _formatTimestamp(String isoTimestamp) {
@@ -224,107 +225,117 @@ class _CommentsModalState extends State<CommentsModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-            child: Container(color: Colors.black.withOpacity(0.2)),
+    return BlocListener<CommentBloc, CommentState>(
+      listener: (context, state) {
+        if (state is CommentAdded ||
+            state is CommentDeleted ||
+            state is CommentUpdated) {
+          context.read<CommentBloc>().add(FetchCommentsByBook(widget.targetId));
+        }
+      },
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Container(color: Colors.black.withOpacity(0.2)),
+            ),
           ),
-        ),
-        DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[400],
-                        borderRadius: BorderRadius.circular(2.5),
+          DraggableScrollableSheet(
+            initialChildSize: 0.8,
+            minChildSize: 0.5,
+            maxChildSize: 0.9,
+            builder: (context, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
                       ),
                     ),
-                  ),
-                  const Text(
-                    "Comentarios",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  if (_commentMode != CommentMode.add)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Row(
-                        children: [
-                          Text(
-                            _commentMode == CommentMode.edit
-                                ? "Editando comentario"
-                                : "Respondiendo a comentario",
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.blue),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close,
-                                size: 16, color: Colors.blue),
-                            onPressed: _cancelCommentMode,
-                          ),
-                        ],
-                      ),
+                    const Text(
+                      "Comentarios",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _commentController,
-                    decoration: InputDecoration(
-                      hintText: "Escribe un comentario...",
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: _submitComment,
+                    if (_commentMode != CommentMode.add)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Row(
+                          children: [
+                            Text(
+                              _commentMode == CommentMode.edit
+                                  ? "Editando comentario"
+                                  : "Respondiendo a comentario",
+                              style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.blue),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close,
+                                  size: 16, color: Colors.blue),
+                              onPressed: _cancelCommentMode,
+                            ),
+                          ],
+                        ),
                       ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _commentController,
+                      decoration: InputDecoration(
+                        hintText: "Escribe un comentario...",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.send),
+                          onPressed: _submitComment,
+                        ),
+                      ),
+                      onSubmitted: (_) => _submitComment(),
                     ),
-                    onSubmitted: (_) => _submitComment(),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: BlocBuilder<CommentBloc, CommentState>(
-                      builder: (context, state) {
-                        if (state is CommentLoading) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        } else if (state is CommentLoaded) {
-                          final comments = state.comments;
-                          if (comments.isEmpty) {
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: BlocBuilder<CommentBloc, CommentState>(
+                        builder: (context, state) {
+                          if (state is CommentLoading) {
                             return const Center(
-                                child: Text("No hay comentarios aún."));
+                                child: CircularProgressIndicator());
+                          } else if (state is CommentLoaded) {
+                            final comments = state.comments;
+                            if (comments.isEmpty) {
+                              return const Center(
+                                  child: Text("No hay comentarios aún."));
+                            }
+                            return SingleChildScrollView(
+                              controller: scrollController,
+                              child: _buildCommentsList(comments),
+                            );
+                          } else if (state is CommentError) {
+                            return Center(child: Text(state.message));
                           }
-                          return SingleChildScrollView(
-                            controller: scrollController,
-                            child: _buildCommentsList(comments),
-                          );
-                        } else if (state is CommentError) {
-                          return Center(child: Text(state.message));
-                        }
-                        return const SizedBox();
-                      },
+                          return const SizedBox();
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

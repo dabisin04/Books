@@ -1,33 +1,34 @@
-// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api
+// ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:books/domain/ports/book/chapter_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:flutter_quill/quill_delta.dart' as quill;
-import 'package:html/dom.dart' as dom;
-import 'package:html/parser.dart' show parse;
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/application/bloc/book/book_bloc.dart';
-import 'package:books/application/bloc/book/book_event.dart';
+import 'package:books/domain/entities/book/chapter.dart';
+import 'package:books/application/bloc/chapter/chapter_bloc.dart';
+import 'package:books/application/bloc/chapter/chapter_event.dart';
 import '../../../services/gemini_service.dart';
 import '../../widgets/book/custom_quill_tool_bar.dart';
-import '../../widgets/book/publication_date_selector.dart';
-import '../loading.dart';
 
-class WriteBookContentScreen extends StatefulWidget {
+class WriteChapterScreen extends StatefulWidget {
   final Book book;
+  final Chapter? chapter; // Si se pasa, se está editando un capítulo existente
 
-  const WriteBookContentScreen({super.key, required this.book});
+  const WriteChapterScreen({Key? key, required this.book, this.chapter})
+      : super(key: key);
 
   @override
-  _WriteBookContentScreenState createState() => _WriteBookContentScreenState();
+  _WriteChapterScreenState createState() => _WriteChapterScreenState();
 }
 
-class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
+class _WriteChapterScreenState extends State<WriteChapterScreen> {
   late final quill.QuillController _controller;
-  DateTime? _selectedPublicationDate;
+  final TextEditingController _chapterTitleController = TextEditingController();
+  int _chapterNumber = 1;
   bool _isFetchingSuggestion = false;
   quill.Delta? _previousDelta;
   bool _showDiscardBanner = false;
@@ -38,129 +39,93 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<BookBloc>().add(LoadBooks());
-    _selectedPublicationDate = widget.book.publicationDate;
-
-    if (widget.book.content != null && widget.book.content!.isNotEmpty) {
-      try {
-        final List<dynamic> deltaOps = widget.book.content!['ops'];
-        final doc = quill.Document.fromJson(deltaOps);
-        _controller = quill.QuillController(
-          document: doc,
-          selection: const TextSelection.collapsed(offset: 0),
-        );
-      } catch (e) {
+    if (widget.chapter != null) {
+      _chapterTitleController.text = widget.chapter!.title;
+      _chapterNumber = widget.chapter!.chapterNumber;
+      if (widget.chapter!.content != null &&
+          widget.chapter!.content!.isNotEmpty) {
+        try {
+          final List<dynamic>? ops = widget.chapter!.content!['ops'];
+          if (ops != null) {
+            _controller = quill.QuillController(
+              document: quill.Document.fromJson(ops),
+              selection: const TextSelection.collapsed(offset: 0),
+            );
+          } else {
+            _controller = quill.QuillController.basic();
+          }
+        } catch (e) {
+          _controller = quill.QuillController.basic();
+        }
+      } else {
         _controller = quill.QuillController.basic();
       }
     } else {
       _controller = quill.QuillController.basic();
+      _chapterNumber = 1;
+      Future.microtask(() async {
+        try {
+          final chapterRepo = RepositoryProvider.of<ChapterRepository>(context);
+          final chapters =
+              await chapterRepo.fetchChaptersByBook(widget.book.id);
+          int nextNumber = 1;
+          if (chapters.isNotEmpty) {
+            nextNumber = chapters
+                    .map((c) => c.chapterNumber)
+                    .reduce((a, b) => a > b ? a : b) +
+                1;
+          }
+          if (mounted) {
+            setState(() {
+              _chapterNumber = nextNumber;
+            });
+          }
+        } catch (e) {
+          debugPrint("Error al obtener el siguiente número de capítulo: $e");
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _chapterTitleController.dispose();
     _discardBannerTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _finishBookCreation() async {
+  Future<void> _finishChapter() async {
     final deltaJson = _controller.document.toDelta().toJson();
     final contentMap = {'ops': deltaJson};
 
-    print("Contenido guardado en DB: ${jsonEncode(contentMap)}");
-
-    final updatedBook = widget.book.copyWith(
-      content: contentMap,
-      publicationDate: _selectedPublicationDate,
-    );
-
-    context.read<BookBloc>().add(UpdateBookContent(updatedBook.id, contentMap));
-    if (_selectedPublicationDate != null) {
-      context.read<BookBloc>().add(
-            UpdateBookPublicationDate(
-              updatedBook.id,
-              _selectedPublicationDate!.toIso8601String(),
-            ),
-          );
+    if (widget.chapter != null) {
+      // Actualizar capítulo existente
+      final updatedChapter = widget.chapter!.copyWith(
+        title: _chapterTitleController.text.trim(),
+        content: contentMap,
+      );
+      context.read<ChapterBloc>().add(UpdateChapterEvent(updatedChapter));
+    } else {
+      // Crear nuevo capítulo
+      final newChapter = Chapter(
+        bookId: widget.book.id,
+        title: _chapterTitleController.text.trim(),
+        content: contentMap,
+        uploadDate: DateTime.now().toIso8601String(),
+        chapterNumber: _chapterNumber,
+      );
+      context.read<ChapterBloc>().add(AddChapterEvent(newChapter));
     }
-
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("Libro actualizado correctamente"),
+        content: Text("Capítulo guardado correctamente"),
         duration: Duration(seconds: 2),
       ),
     );
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoadingScreen()),
-    );
-  }
-
-  quill.Delta htmlToDelta(String html) {
-    final document = parse(html);
-    final delta = quill.Delta();
-
-    void processNode(dom.Node node) {
-      if (node is dom.Text) {
-        delta.insert(node.text);
-      } else if (node is dom.Element) {
-        switch (node.localName) {
-          case 'p':
-            for (var child in node.nodes) {
-              processNode(child);
-            }
-            delta.insert('\n');
-            break;
-          case 'strong':
-          case 'b':
-            final attributes = {'bold': true};
-            for (var child in node.nodes) {
-              if (child is dom.Text) {
-                delta.insert(child.text, attributes);
-              } else {
-                processNode(child);
-              }
-            }
-            break;
-          case 'ul':
-            for (var child in node.nodes) {
-              if (child is dom.Element && child.localName == 'li') {
-                for (var liChild in child.nodes) {
-                  processNode(liChild);
-                }
-                delta.insert('\n', {'list': 'bullet'});
-              }
-            }
-            break;
-          case 'ol':
-            for (var child in node.nodes) {
-              if (child is dom.Element && child.localName == 'li') {
-                for (var liChild in child.nodes) {
-                  processNode(liChild);
-                }
-                delta.insert('\n', {'list': 'ordered'});
-              }
-            }
-            break;
-          default:
-            for (var child in node.nodes) {
-              processNode(child);
-            }
-            break;
-        }
-      }
-    }
-
-    for (var node in document.body!.nodes) {
-      processNode(node);
-    }
-
-    return delta;
+    Navigator.pop(context);
   }
 
   Future<void> _getGeminiSuggestion(String userPrompt) async {
@@ -170,10 +135,15 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     _previousDelta = _controller.document.toDelta();
     final currentText = _controller.document.toPlainText().trim();
 
+    // Construir un título para el prompt: si el usuario ya ingresó un título, se usa;
+    // de lo contrario, se utiliza el número asignado.
+    final chapterTitleOrNumber = _chapterTitleController.text.isNotEmpty
+        ? _chapterTitleController.text
+        : "Capítulo $_chapterNumber";
+
     try {
-      // Se utiliza el método getBookSuggestion de GeminiService
       final suggestionText = await GeminiService.getBookSuggestion(
-        title: widget.book.title,
+        title: "${widget.book.title} - $chapterTitleOrNumber",
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
         userPrompt: userPrompt,
@@ -197,7 +167,9 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
       _suggestionEnd = _controller.document.length;
       _controller.updateSelection(
         TextSelection(
-            baseOffset: _suggestionStart, extentOffset: _suggestionEnd),
+          baseOffset: _suggestionStart,
+          extentOffset: _suggestionEnd,
+        ),
         quill.ChangeSource.local,
       );
       setState(() {
@@ -248,16 +220,12 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.book.title,
-          style: const TextStyle(fontSize: 16),
-        ),
-        toolbarHeight: 44,
-        iconTheme: const IconThemeData(color: Colors.white),
+        title:
+            Text(widget.chapter != null ? "Editar Capítulo" : "Nuevo Capítulo"),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _finishBookCreation,
+            onPressed: _finishChapter,
           ),
         ],
       ),
@@ -270,13 +238,22 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         },
         child: Column(
           children: [
-            PublicationDateSelector(
-              initialDate: _selectedPublicationDate,
-              onDateSelected: (selectedDate) {
-                setState(() {
-                  _selectedPublicationDate = selectedDate;
-                });
-              },
+            // Título sin bordes que ocupa todo el ancho (con límite máximo para pantallas grandes)
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: TextField(
+                  controller: _chapterTitleController,
+                  maxLines: 1,
+                  decoration: const InputDecoration(
+                    labelText: "Título del Capítulo",
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
             ),
             Expanded(
               child: Stack(
@@ -290,7 +267,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
                       padding: EdgeInsets.all(8.0),
                       autoFocus: true,
                       expands: false,
-                      placeholder: 'Escribe tu contenido...',
+                      placeholder: 'Escribe el contenido del capítulo...',
                     ),
                   ),
                   if (_showDiscardBanner)

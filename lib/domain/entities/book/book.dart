@@ -15,27 +15,29 @@ class Book extends Equatable {
   final double rating;
   final int ratingsCount;
   final int reports;
-  final Map<String, dynamic>? content; // Se almacena el Delta en forma de Map
+  final Map<String, dynamic>? content;
   final bool isTrashed;
+  final bool has_chapters;
 
   static const Uuid _uuid = Uuid();
 
-  Book({
-    String? id,
-    required this.title,
-    required this.authorId,
-    this.description,
-    required this.genre,
-    this.additionalGenres = const [],
-    required this.uploadDate,
-    this.publicationDate,
-    this.views = 0,
-    this.rating = 0.0,
-    this.ratingsCount = 0,
-    this.reports = 0,
-    this.content,
-    this.isTrashed = false,
-  }) : id = id ?? _uuid.v4();
+  Book(
+      {String? id,
+      required this.title,
+      required this.authorId,
+      this.description,
+      required this.genre,
+      this.additionalGenres = const [],
+      required this.uploadDate,
+      this.publicationDate,
+      this.views = 0,
+      this.rating = 0.0,
+      this.ratingsCount = 0,
+      this.reports = 0,
+      this.content,
+      this.isTrashed = false,
+      this.has_chapters = false})
+      : id = id ?? _uuid.v4();
 
   /// Verifica si el libro ya fue publicado
   bool get isPublished {
@@ -60,23 +62,24 @@ class Book extends Equatable {
     int? reports,
     Map<String, dynamic>? content,
     bool? isTrashed,
+    bool? has_chapters,
   }) {
     return Book(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      authorId: authorId ?? this.authorId,
-      description: description ?? this.description,
-      genre: genre ?? this.genre,
-      additionalGenres: additionalGenres ?? List.from(this.additionalGenres),
-      uploadDate: uploadDate ?? this.uploadDate,
-      publicationDate: publicationDate ?? this.publicationDate,
-      views: views ?? this.views,
-      rating: rating ?? this.rating,
-      ratingsCount: ratingsCount ?? this.ratingsCount,
-      reports: reports ?? this.reports,
-      content: content ?? this.content,
-      isTrashed: isTrashed ?? this.isTrashed,
-    );
+        id: id ?? this.id,
+        title: title ?? this.title,
+        authorId: authorId ?? this.authorId,
+        description: description ?? this.description,
+        genre: genre ?? this.genre,
+        additionalGenres: additionalGenres ?? List.from(this.additionalGenres),
+        uploadDate: uploadDate ?? this.uploadDate,
+        publicationDate: publicationDate ?? this.publicationDate,
+        views: views ?? this.views,
+        rating: rating ?? this.rating,
+        ratingsCount: ratingsCount ?? this.ratingsCount,
+        reports: reports ?? this.reports,
+        content: content ?? this.content,
+        isTrashed: isTrashed ?? this.isTrashed,
+        has_chapters: has_chapters ?? this.has_chapters);
   }
 
   /// Convierte el objeto `Book` en un `Map<String, dynamic>` para almacenarlo
@@ -97,34 +100,35 @@ class Book extends Equatable {
       // Se codifica el contenido (Delta) a un JSON string
       'content': content != null ? jsonEncode(content) : null,
       'is_trashed': isTrashed ? 1 : 0,
+      'has_chapters': has_chapters ? 1 : 0,
     };
   }
 
   /// Crea un objeto `Book` a partir de un `Map<String, dynamic>`
   factory Book.fromMap(Map<String, dynamic> map) {
     return Book(
-      id: map['id'] ?? _uuid.v4(),
-      title: map['title'] ?? 'Sin título',
-      authorId: map['author_id'] ?? 'Desconocido',
-      description: map['description'],
-      genre: map['genre'] ?? 'Sin género',
-      additionalGenres: map['additional_genres'] != null
-          ? List<String>.from(jsonDecode(map['additional_genres']))
-          : [],
-      uploadDate: map['upload_date'] ?? DateTime.now().toIso8601String(),
-      publicationDate: map['publication_date'] != null
-          ? DateTime.tryParse(map['publication_date'])
-          : null,
-      views: map['views'] ?? 0,
-      rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
-      ratingsCount: map['ratings_count'] ?? 0,
-      reports: map['reports'] ?? 0,
-      // Se decodifica el JSON en un Map
-      content: map['content'] != null
-          ? jsonDecode(map['content']) as Map<String, dynamic>
-          : null,
-      isTrashed: map['is_trashed'] == 1,
-    );
+        id: map['id'] ?? _uuid.v4(),
+        title: map['title'] ?? 'Sin título',
+        authorId: map['author_id'] ?? 'Desconocido',
+        description: map['description'],
+        genre: map['genre'] ?? 'Sin género',
+        additionalGenres: map['additional_genres'] != null
+            ? List<String>.from(jsonDecode(map['additional_genres']))
+            : [],
+        uploadDate: map['upload_date'] ?? DateTime.now().toIso8601String(),
+        publicationDate: map['publication_date'] != null
+            ? DateTime.tryParse(map['publication_date'])
+            : null,
+        views: map['views'] ?? 0,
+        rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+        ratingsCount: map['ratings_count'] ?? 0,
+        reports: map['reports'] ?? 0,
+        // Se decodifica el JSON en un Map
+        content: map['content'] != null
+            ? jsonDecode(map['content']) as Map<String, dynamic>
+            : null,
+        isTrashed: map['is_trashed'] == 1,
+        has_chapters: map['has_chapters'] == 1);
   }
 
   @override
@@ -143,5 +147,6 @@ class Book extends Equatable {
         reports,
         content,
         isTrashed,
+        has_chapters,
       ];
 }

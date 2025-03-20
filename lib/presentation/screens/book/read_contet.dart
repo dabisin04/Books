@@ -1,17 +1,22 @@
-// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api
+// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:books/domain/entities/book/book.dart';
+import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
-import '../../../application/bloc/book/book_event.dart';
+import 'package:books/application/bloc/book/book_event.dart';
+import 'package:books/application/bloc/chapter/chapter_bloc.dart';
+import 'package:books/application/bloc/chapter/chapter_state.dart';
+import 'package:books/application/bloc/chapter/chapter_event.dart';
 import '../../widgets/book/comments_modal.dart';
 import '../../widgets/book/paginated_book_viewer.dart';
 
 class ReadBookContentScreen extends StatefulWidget {
-  final Book book;
-  const ReadBookContentScreen({Key? key, required this.book}) : super(key: key);
+  final dynamic contentEntity;
+  const ReadBookContentScreen({Key? key, required this.contentEntity})
+      : super(key: key);
 
   @override
   _ReadBookContentScreenState createState() => _ReadBookContentScreenState();
@@ -19,117 +24,63 @@ class ReadBookContentScreen extends StatefulWidget {
 
 class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
   late final quill.Document _document;
+  bool _isChapter = false;
+  bool _bookHasChapters = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BookBloc>().add(UpdateBookViews(widget.book.id));
-    });
+    _isChapter = widget.contentEntity is Chapter;
+    if (!_isChapter && widget.contentEntity is Book) {
+      _bookHasChapters = (widget.contentEntity as Book).has_chapters;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context
+            .read<BookBloc>()
+            .add(UpdateBookViews((widget.contentEntity as Book).id));
+      });
+    }
 
-    debugPrint(
-        "Contenido recibido en ReadBookContentScreen: ${widget.book.content}");
-    if (widget.book.content != null && widget.book.content!.isNotEmpty) {
-      try {
-        final List<dynamic>? ops = widget.book.content!['ops'];
-        if (ops == null) {
-          debugPrint("Error: 'ops' es null o no está definido.");
-          _document = quill.Document();
-        } else {
-          _document = quill.Document.fromJson(ops);
-        }
-      } catch (e) {
-        debugPrint("Error al cargar contenido del libro: $e");
-        _document = quill.Document();
-      }
+    if (_isChapter) {
+      final Chapter chapter = widget.contentEntity as Chapter;
+      _document = _loadDocument(chapter.content);
+    } else if (_bookHasChapters) {
+      _document = quill.Document()..insert(0, '');
+      context
+          .read<ChapterBloc>()
+          .add(LoadChaptersByBook((widget.contentEntity as Book).id));
     } else {
-      debugPrint("Error: El contenido del libro está vacío o es null.");
-      _document = quill.Document();
+      final Book book = widget.contentEntity as Book;
+      _document = _loadDocument(book.content);
     }
   }
 
+  quill.Document _loadDocument(Map<String, dynamic>? content) {
+    if (content != null && content.isNotEmpty) {
+      try {
+        final List<dynamic>? ops = content['ops'];
+        if (ops != null) {
+          return quill.Document.fromJson(ops);
+        }
+      } catch (e) {
+        // error en parseo, se retorna documento vacío.
+      }
+    }
+    return quill.Document();
+  }
+
   void _openCommentsModal() {
+    final targetId = _isChapter
+        ? (widget.contentEntity as Chapter).id
+        : (widget.contentEntity as Book).id;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       barrierColor: Colors.black.withOpacity(0.5),
       backgroundColor: Colors.transparent,
-      builder: (context) => CommentsModal(bookId: widget.book.id),
-    );
-  }
-
-  void _openRatingModal() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: Colors.black.withOpacity(0.5),
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      builder: (context) => CommentsModal(
+        targetId: targetId,
+        targetType: _isChapter ? "chapter" : "book",
       ),
-      builder: (context) {
-        double rating = 0.0;
-        final TextEditingController ratingController = TextEditingController();
-        return FractionallySizedBox(
-          heightFactor: 0.4,
-          child: Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              left: 16,
-              right: 16,
-              top: 16,
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 40,
-                  height: 5,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-                const Text(
-                  "Calificar",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: ratingController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: "Ingresa tu puntaje (1-5)",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    final input = double.tryParse(ratingController.text);
-                    rating = (input != null && input >= 1 && input <= 5)
-                        ? input
-                        : 0.0;
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Calificación enviada: $rating"),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  child: const Text("Enviar"),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -141,17 +92,60 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.book.title,
-          style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+          _isChapter
+              ? "Capítulo ${(widget.contentEntity as Chapter).chapterNumber}: ${(widget.contentEntity as Chapter).title}"
+              : (widget.contentEntity as Book).title,
+          style: const TextStyle(fontSize: 16),
         ),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
+        toolbarHeight: 44,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: PaginatedBookViewer(
-        document: _document,
-        fontSize: dynamicFontSize,
-      ),
+      body: _isChapter || !_bookHasChapters
+          ? PaginatedBookViewer(
+              document: _document,
+              fontSize: dynamicFontSize,
+            )
+          : BlocBuilder<ChapterBloc, ChapterState>(
+              builder: (context, state) {
+                if (state is ChapterLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (state is ChapterLoaded) {
+                  final chapters = state.chapters;
+                  if (chapters.isEmpty) {
+                    return const Center(
+                        child: Text("No se encontraron capítulos."));
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: chapters.length,
+                    itemBuilder: (context, index) {
+                      final chapter = chapters[index];
+                      print("este es el capitulo #$chapter.chapterNumber");
+                      return Card(
+                        elevation: 2,
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        child: ListTile(
+                          title: Text(
+                              "Capítulo ${chapter.chapterNumber}: ${chapter.title}"),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ReadBookContentScreen(
+                                    contentEntity: chapter),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  );
+                } else {
+                  return const Center(
+                      child: Text("Error al cargar capítulos."));
+                }
+              },
+            ),
       bottomNavigationBar: Container(
         color: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -167,17 +161,6 @@ class _ReadBookContentScreenState extends State<ReadBookContentScreen> {
               onPressed: _openCommentsModal,
               icon: const Icon(Icons.comment),
               label: const Text("Comentar",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 0,
-              ),
-              onPressed: _openRatingModal,
-              icon: const Icon(Icons.star),
-              label: const Text("Calificar",
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],

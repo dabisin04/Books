@@ -1,17 +1,23 @@
 // ignore_for_file: library_private_types_in_public_api
 import 'dart:math';
+import 'package:books/presentation/screens/book/write_book_chapter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/application/bloc/comment/comment_bloc.dart';
 import 'package:books/application/bloc/comment/comment_event.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_state.dart';
+import 'package:books/application/bloc/chapter/chapter_bloc.dart';
+import 'package:books/application/bloc/chapter/chapter_state.dart';
+import 'package:books/application/bloc/chapter/chapter_event.dart';
+import 'package:books/domain/entities/book/book.dart';
+import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/presentation/screens/book/write_book.dart';
 import '../../widgets/book/comments_box.dart';
 import '../../widgets/global/custom_button.dart';
 
 class BookDetailsScreen extends StatefulWidget {
-  final dynamic book;
+  final Book book;
   const BookDetailsScreen({super.key, required this.book});
 
   @override
@@ -22,12 +28,18 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   bool _descriptionExpanded = false;
   final ScrollController _scrollController = ScrollController();
   String? _authorName;
+  Chapter?
+      _recentlyDeletedChapter; // Para almacenar temporalmente el capítulo eliminado
 
   @override
   void initState() {
     super.initState();
     _fetchAuthorName();
     context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
+    // Si el libro tiene capítulos, se disparará la carga en la pantalla de capítulos (por ejemplo, en el ChapterBloc)
+    if (widget.book.has_chapters) {
+      context.read<ChapterBloc>().add(LoadChaptersByBook(widget.book.id));
+    }
   }
 
   @override
@@ -74,6 +86,49 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     });
   }
 
+  void _deleteChapter(Chapter chapter) {
+    // Almacena temporalmente el capítulo eliminado
+    _recentlyDeletedChapter = chapter;
+    // Envía el evento para eliminar el capítulo
+    context.read<ChapterBloc>().add(DeleteChapterEvent(
+          chapter.id,
+          widget.book.id,
+        ));
+
+    // Muestra el SnackBar con la opción "Deshacer"
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Capítulo '${chapter.title}' eliminado"),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: "Deshacer",
+          onPressed: () {
+            if (_recentlyDeletedChapter != null) {
+              // Envía el evento para reinsertar el capítulo
+              context
+                  .read<ChapterBloc>()
+                  .add(AddChapterEvent(_recentlyDeletedChapter!));
+              _recentlyDeletedChapter = null;
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _editChapter(Chapter chapter) {
+    // Navega a la pantalla de edición de capítulo (WriteChapterScreen)
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WriteChapterScreen(
+          book: widget.book,
+          chapter: chapter,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserBloc>().state;
@@ -83,18 +138,28 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       floatingActionButton: isAuthor
           ? FloatingActionButton(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WriteBookScreen(book: widget.book),
-                  ),
-                );
+                // Si el libro tiene capítulos, el FAB permite agregar uno nuevo.
+                // Si es un libro sin capítulos, se permite editar el libro.
+                if (widget.book.has_chapters) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          WriteChapterScreen(book: widget.book),
+                    ),
+                  );
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => WriteBookScreen(book: widget.book),
+                    ),
+                  );
+                }
               },
               backgroundColor: Colors.redAccent[100],
-              child: Image.asset(
-                'images/pluma.png',
-                width: 24,
-                height: 24,
+              child: Icon(
+                widget.book.has_chapters ? Icons.add : Icons.edit,
                 color: Colors.white,
               ),
             )
@@ -145,39 +210,29 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                               fontSize: 16, color: Colors.white70),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.star,
-                                color: Colors.yellow, size: 20),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.book.rating.toStringAsFixed(1),
-                              style: const TextStyle(
-                                  fontSize: 16, color: Colors.white),
-                            ),
-                            const SizedBox(width: 16),
-                            ElevatedButton(
-                              onPressed: () {},
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white24,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                        if (!widget.book.has_chapters) ...[
+                          Row(
+                            children: [
+                              const Icon(Icons.star,
+                                  color: Colors.yellow, size: 20),
+                              const SizedBox(width: 4),
+                              Text(
+                                widget.book.rating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                    fontSize: 16, color: Colors.white),
                               ),
-                              child: const Icon(Icons.star_border,
-                                  color: Colors.white),
-                            ),
-                            const SizedBox(width: 16),
-                            const Icon(Icons.remove_red_eye,
-                                color: Colors.white, size: 20),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.book.views.toString(),
-                              style: const TextStyle(
-                                  fontSize: 16, color: Colors.white),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(width: 16),
+                              const Icon(Icons.remove_red_eye,
+                                  color: Colors.white, size: 20),
+                              const SizedBox(width: 4),
+                              Text(
+                                widget.book.views.toString(),
+                                style: const TextStyle(
+                                    fontSize: 16, color: Colors.white),
+                              ),
+                            ],
+                          )
+                        ],
                       ],
                     ),
                   ),
@@ -210,16 +265,86 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                   const SizedBox(height: 16),
                   Center(
                     child: CustomButton(
-                      text: 'Leer Libro',
+                      text: widget.book.has_chapters
+                          ? 'Ver Capítulos'
+                          : 'Leer Libro',
                       onPressed: () {
-                        Navigator.pushNamed(
-                          context,
-                          '/read_content',
-                          arguments: widget.book,
-                        );
+                        if (widget.book.has_chapters) {
+                        } else {
+                          Navigator.pushNamed(
+                            context,
+                            '/read_content',
+                            arguments: widget.book,
+                          );
+                        }
                       },
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  if (widget.book.has_chapters) ...[
+                    const Text(
+                      'Capítulos',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    BlocBuilder<ChapterBloc, ChapterState>(
+                      builder: (context, state) {
+                        if (state is ChapterLoading) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        } else if (state is ChapterLoaded) {
+                          final chapters = state.chapters;
+                          if (chapters.isEmpty) {
+                            return const Text("No se encontraron capítulos.");
+                          }
+                          return ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: chapters.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(),
+                            itemBuilder: (context, index) {
+                              final chapter = chapters[index];
+                              return ListTile(
+                                title: Text(
+                                    "Capítulo ${chapter.chapterNumber}: ${chapter.title}"),
+                                onTap: () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/read_content',
+                                    arguments: chapter,
+                                  );
+                                },
+                                trailing: isAuthor
+                                    ? Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit),
+                                            onPressed: () {
+                                              _editChapter(chapter);
+                                            },
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete),
+                                            onPressed: () {
+                                              _deleteChapter(chapter);
+                                            },
+                                          ),
+                                        ],
+                                      )
+                                    : null,
+                              );
+                            },
+                          );
+                        } else {
+                          return const Center(
+                              child: Text("Error al cargar capítulos."));
+                        }
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   const Text(
                     'Comentarios',
