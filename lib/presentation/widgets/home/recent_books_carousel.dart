@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../domain/entities/book/book.dart';
-import '../../screens/book/book_details.dart';
+import '../../screens/book/reading/book_details.dart';
 
 class RecentBooksCarousel extends StatefulWidget {
   final List<Book> books;

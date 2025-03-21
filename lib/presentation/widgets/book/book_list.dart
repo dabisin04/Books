@@ -13,7 +13,7 @@ class BooksListWidget extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   const BooksListWidget({
-    Key? key,
+    super.key,
     required this.books,
     required this.isTrash,
     required this.onBookTap,
@@ -21,7 +21,7 @@ class BooksListWidget extends StatelessWidget {
     this.onRestore,
     this.onDeleteForever,
     this.padding = const EdgeInsets.symmetric(horizontal: 16.0),
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

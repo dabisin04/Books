@@ -5,7 +5,7 @@ import 'package:books/application/bloc/user/user_event.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/domain/ports/book/chapter_repository.dart';
 import 'package:books/infrastructure/adapters/chapter_repository_impl.dart';
-import 'package:books/presentation/screens/book/write_book_chapter.dart';
+import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -27,12 +27,12 @@ import 'package:books/presentation/screens/splash_screen.dart';
 import 'package:books/presentation/screens/auth/login.dart';
 import 'package:books/presentation/screens/auth/register.dart';
 import 'package:books/presentation/screens/home.dart';
-import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/screens/book/reading/book_details.dart';
 import 'package:books/presentation/screens/user/profile.dart';
-import 'package:books/presentation/screens/book/write_book.dart';
-import 'package:books/presentation/screens/book/write_book_content.dart';
-import 'package:books/presentation/screens/book/read_contet.dart';
-import 'package:books/presentation/screens/book/thrash_bin.dart';
+import 'package:books/presentation/screens/book/writing/write_book.dart';
+import 'package:books/presentation/screens/book/writing/write_book_content.dart';
+import 'package:books/presentation/screens/book/reading/read_contet.dart';
+import 'package:books/presentation/screens/book/trashing/thrash_bin.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();

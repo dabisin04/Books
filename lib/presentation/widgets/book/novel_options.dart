@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/screens/book/write_book.dart';
-import 'package:books/presentation/screens/book/write_book_chapter.dart';
+import 'package:books/presentation/screens/book/writing/write_book.dart';
+import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 
 class NovelOptionsModal extends StatelessWidget {
   final Book book;

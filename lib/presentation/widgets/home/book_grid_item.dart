@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/screens/book/reading/book_details.dart';
 import 'dart:math';
 
 class BookGridItem extends StatelessWidget {

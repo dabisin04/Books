@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api, prefer_interpolation_to_compose_strings
+// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api, prefer_interpolation_to_compose_strings, sized_box_for_whitespace
 
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;

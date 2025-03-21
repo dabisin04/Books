@@ -1,8 +1,8 @@
 import 'package:books/presentation/widgets/book/publication_date.dart';
 import 'package:flutter/material.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/screens/book/write_book_content.dart';
-import 'package:books/presentation/screens/book/write_book.dart';
+import 'package:books/presentation/screens/book/writing/write_book_content.dart';
+import 'package:books/presentation/screens/book/writing/write_book.dart';
 
 class BookOptions extends StatelessWidget {
   final Book book;

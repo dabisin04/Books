@@ -5,7 +5,7 @@ import 'package:books/domain/entities/book/book.dart';
 class ProfileBookCard extends StatelessWidget {
   final Book book;
 
-  const ProfileBookCard({Key? key, required this.book}) : super(key: key);
+  const ProfileBookCard({super.key, required this.book});
 
   LinearGradient _generateRandomGradient() {
     final random = Random();
