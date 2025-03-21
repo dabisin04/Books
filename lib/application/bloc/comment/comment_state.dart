@@ -57,6 +57,8 @@ class CommentUpdated extends CommentState {
   List<Object?> get props => [comment];
 }
 
+class RepliesLoading extends CommentState {}
+
 class RepliesLoaded extends CommentState {
   final List<Comment> replies;
 
