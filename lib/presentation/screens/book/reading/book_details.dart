@@ -1,6 +1,8 @@
 // ignore_for_file: library_private_types_in_public_api
 import 'dart:math';
-import 'package:books/presentation/screens/book/write_book_chapter.dart';
+import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
+import 'package:books/presentation/widgets/book/book_options.dart';
+import 'package:books/presentation/widgets/book/novel_options.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/application/bloc/comment/comment_bloc.dart';
@@ -12,9 +14,9 @@ import 'package:books/application/bloc/chapter/chapter_state.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
-import 'package:books/presentation/screens/book/write_book.dart';
-import '../../widgets/book/comments_box.dart';
-import '../../widgets/global/custom_button.dart';
+import 'package:books/presentation/screens/book/writing/write_book.dart';
+import '../../../widgets/book/comments_box.dart';
+import '../../../widgets/global/custom_button.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   final Book book;
@@ -36,7 +38,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     super.initState();
     _fetchAuthorName();
     context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
-    // Si el libro tiene capítulos, se disparará la carga en la pantalla de capítulos (por ejemplo, en el ChapterBloc)
+    // Si el libro tiene capítulos, se dispara la carga de capítulos
     if (widget.book.has_chapters) {
       context.read<ChapterBloc>().add(LoadChaptersByBook(widget.book.id));
     }
@@ -90,10 +92,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     // Almacena temporalmente el capítulo eliminado
     _recentlyDeletedChapter = chapter;
     // Envía el evento para eliminar el capítulo
-    context.read<ChapterBloc>().add(DeleteChapterEvent(
-          chapter.id,
-          widget.book.id,
-        ));
+    context
+        .read<ChapterBloc>()
+        .add(DeleteChapterEvent(chapter.id, widget.book.id));
 
     // Muestra el SnackBar con la opción "Deshacer"
     ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +105,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
           label: "Deshacer",
           onPressed: () {
             if (_recentlyDeletedChapter != null) {
-              // Envía el evento para reinsertar el capítulo
               context
                   .read<ChapterBloc>()
                   .add(AddChapterEvent(_recentlyDeletedChapter!));
@@ -117,7 +117,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   void _editChapter(Chapter chapter) {
-    // Navega a la pantalla de edición de capítulo (WriteChapterScreen)
+    // Navega a la pantalla de edición de capítulo
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -129,41 +129,44 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
   }
 
+  Widget _buildFloatingActionButton(bool isAuthor) {
+    if (!isAuthor) return const SizedBox();
+    if (widget.book.has_chapters) {
+      return FloatingActionButton(
+        mini: true,
+        backgroundColor: Colors.redAccent[100],
+        child: Image.asset("images/pluma.png",
+            width: 20, height: 20, color: Colors.white),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (context) => NovelOptionsModal(book: widget.book),
+          );
+        },
+      );
+    } else {
+      return FloatingActionButton(
+        mini: true,
+        backgroundColor: Colors.redAccent[100],
+        child: Image.asset("images/pluma.png",
+            width: 20, height: 20, color: Colors.white),
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (context) => BookOptions(book: widget.book),
+          );
+        },
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserBloc>().state;
     final bool isAuthor = userState is UserAuthenticated &&
         userState.user.id == widget.book.authorId;
     return Scaffold(
-      floatingActionButton: isAuthor
-          ? FloatingActionButton(
-              onPressed: () {
-                // Si el libro tiene capítulos, el FAB permite agregar uno nuevo.
-                // Si es un libro sin capítulos, se permite editar el libro.
-                if (widget.book.has_chapters) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          WriteChapterScreen(book: widget.book),
-                    ),
-                  );
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => WriteBookScreen(book: widget.book),
-                    ),
-                  );
-                }
-              },
-              backgroundColor: Colors.redAccent[100],
-              child: Icon(
-                widget.book.has_chapters ? Icons.add : Icons.edit,
-                color: Colors.white,
-              ),
-            )
-          : null,
+      floatingActionButton: _buildFloatingActionButton(isAuthor),
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
@@ -247,7 +250,8 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: _toggleDescription,
+                    onTap: () => setState(
+                        () => _descriptionExpanded = !_descriptionExpanded),
                     child: AnimatedCrossFade(
                       firstChild: Text(
                         widget.book.description ?? "Sin sinopsis disponible",
@@ -270,6 +274,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                           : 'Leer Libro',
                       onPressed: () {
                         if (widget.book.has_chapters) {
+                          // En caso de libros con capítulos, la lista se muestra en la pantalla
                         } else {
                           Navigator.pushNamed(
                             context,
@@ -322,15 +327,13 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                         children: [
                                           IconButton(
                                             icon: const Icon(Icons.edit),
-                                            onPressed: () {
-                                              _editChapter(chapter);
-                                            },
+                                            onPressed: () =>
+                                                _editChapter(chapter),
                                           ),
                                           IconButton(
                                             icon: const Icon(Icons.delete),
-                                            onPressed: () {
-                                              _deleteChapter(chapter);
-                                            },
+                                            onPressed: () =>
+                                                _deleteChapter(chapter),
                                           ),
                                         ],
                                       )

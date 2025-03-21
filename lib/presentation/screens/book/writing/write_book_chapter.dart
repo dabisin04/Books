@@ -1,8 +1,9 @@
-// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:books/domain/ports/book/chapter_repository.dart';
+import 'package:books/presentation/screens/loading.dart';
+import 'package:books/presentation/widgets/book/publication_date.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -11,15 +12,14 @@ import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
-import '../../../services/gemini_service.dart';
-import '../../widgets/book/custom_quill_tool_bar.dart';
+import '../../../../services/gemini_service.dart';
+import '../../../widgets/book/custom_quill_tool_bar.dart';
 
 class WriteChapterScreen extends StatefulWidget {
   final Book book;
   final Chapter? chapter; // Si se pasa, se está editando un capítulo existente
 
-  const WriteChapterScreen({Key? key, required this.book, this.chapter})
-      : super(key: key);
+  const WriteChapterScreen({super.key, required this.book, this.chapter});
 
   @override
   _WriteChapterScreenState createState() => _WriteChapterScreenState();
@@ -96,18 +96,24 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
   }
 
   Future<void> _finishChapter() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return PublicationDateModal(book: widget.book);
+      },
+    );
+
     final deltaJson = _controller.document.toDelta().toJson();
     final contentMap = {'ops': deltaJson};
 
     if (widget.chapter != null) {
-      // Actualizar capítulo existente
       final updatedChapter = widget.chapter!.copyWith(
         title: _chapterTitleController.text.trim(),
         content: contentMap,
       );
       context.read<ChapterBloc>().add(UpdateChapterEvent(updatedChapter));
     } else {
-      // Crear nuevo capítulo
       final newChapter = Chapter(
         bookId: widget.book.id,
         title: _chapterTitleController.text.trim(),
@@ -125,7 +131,10 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
       ),
     );
 
-    Navigator.pop(context);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoadingScreen()),
+    );
   }
 
   Future<void> _getGeminiSuggestion(String userPrompt) async {

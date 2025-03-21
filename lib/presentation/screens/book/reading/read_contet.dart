@@ -10,8 +10,8 @@ import 'package:books/application/bloc/book/book_event.dart';
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_state.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
-import '../../widgets/book/comments_modal.dart';
-import '../../widgets/book/paginated_book_viewer.dart';
+import '../../../widgets/book/comments_modal.dart';
+import '../../../widgets/book/paginated_book_viewer.dart';
 
 class ReadBookContentScreen extends StatefulWidget {
   final dynamic contentEntity;

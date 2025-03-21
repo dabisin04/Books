@@ -7,11 +7,11 @@ import 'package:books/application/bloc/book/book_event.dart';
 import 'package:books/application/bloc/book/book_state.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_state.dart';
-import 'package:books/presentation/screens/book/book_details.dart';
-import '../../widgets/book/book_list.dart';
+import 'package:books/presentation/screens/book/reading/book_details.dart';
+import '../../../widgets/book/book_list.dart';
 
 class TrashScreen extends StatelessWidget {
-  const TrashScreen({Key? key}) : super(key: key);
+  const TrashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +41,7 @@ class TrashScreen extends StatelessWidget {
 class TrashScreenContent extends StatelessWidget {
   final dynamic user;
 
-  const TrashScreenContent({Key? key, required this.user}) : super(key: key);
+  const TrashScreenContent({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {

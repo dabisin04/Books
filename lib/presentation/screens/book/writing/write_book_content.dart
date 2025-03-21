@@ -11,10 +11,10 @@ import 'package:html/parser.dart' show parse;
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
-import '../../../services/gemini_service.dart';
-import '../../widgets/book/custom_quill_tool_bar.dart';
-import '../../widgets/book/publication_date_selector.dart';
-import '../loading.dart';
+import '../../../../services/gemini_service.dart';
+import '../../../widgets/book/custom_quill_tool_bar.dart';
+import '../../../widgets/book/publication_date_selector.dart';
+import '../../loading.dart';
 
 class WriteBookContentScreen extends StatefulWidget {
   final Book book;

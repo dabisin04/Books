@@ -2,13 +2,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
-import 'package:books/presentation/screens/book/write_book_content.dart';
-import 'package:books/presentation/screens/book/write_book_chapter.dart';
+import 'package:books/presentation/screens/book/writing/write_book_content.dart';
+import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 import 'package:books/presentation/widgets/global/custom_button.dart';
-import '../../../application/bloc/book/book_bloc.dart';
-import '../../../application/bloc/book/book_event.dart';
-import '../../../application/bloc/book/book_state.dart';
-import '../../widgets/book/editable_animated_input_field.dart';
+import '../../../../application/bloc/book/book_bloc.dart';
+import '../../../../application/bloc/book/book_event.dart';
+import '../../../../application/bloc/book/book_state.dart';
+import '../../../widgets/book/editable_animated_input_field.dart';
 
 const List<String> availableGenres = [
   "Ficción",
