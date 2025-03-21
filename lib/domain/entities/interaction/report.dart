@@ -5,9 +5,9 @@ class Report extends Equatable {
   final String id;
   final String reporterId;
   final String targetId;
-  final String targetType; // 'book' o 'comment'
+  final String targetType;
   final String reason;
-  final String status; // 'pending', 'reviewed', 'dismissed'
+  final String status;
   final String? adminId;
 
   static const Uuid _uuid = Uuid();
@@ -20,7 +20,7 @@ class Report extends Equatable {
     required this.reason,
     this.status = 'pending',
     this.adminId,
-  }) : id = id ?? _uuid.v4(); // Genera un UUID si no se proporciona
+  }) : id = id ?? _uuid.v4();
 
   Map<String, dynamic> toMap() {
     return {

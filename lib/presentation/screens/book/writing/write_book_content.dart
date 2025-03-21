@@ -171,7 +171,6 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     final currentText = _controller.document.toPlainText().trim();
 
     try {
-      // Se utiliza el método getBookSuggestion de GeminiService
       final suggestionText = await GeminiService.getBookSuggestion(
         title: widget.book.title,
         primaryGenre: widget.book.genre,

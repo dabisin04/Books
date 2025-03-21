@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use, library_private_types_in_public_api
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,7 +27,7 @@ const List<String> availableGenres = [
 ];
 
 class WriteBookScreen extends StatefulWidget {
-  final Book? book; // Parámetro opcional para edición
+  final Book? book;
   const WriteBookScreen({super.key, this.book});
 
   @override
@@ -76,7 +78,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
           ) ??
           Book(
             title: _titleController.text.trim(),
-            authorId: "currentUserId", // Obtener el id del usuario actual
+            authorId: "currentUserId",
             description: _descriptionController.text.trim().isEmpty
                 ? null
                 : _descriptionController.text.trim(),
@@ -104,7 +106,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
         context.read<BookBloc>().add(AddBook(updatedBook));
       }
 
-      // Redirigir a la pantalla correspondiente según la opción de capítulos:
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -194,7 +195,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Si el usuario decide volver atrás, redirige a la pantalla de carga.
         Navigator.pushNamedAndRemoveUntil(
           context,
           '/splash',
@@ -204,9 +204,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
         return false;
       },
       child: BlocListener<BookBloc, BookState>(
-        listener: (context, state) {
-          // La navegación se realiza desde _goToContentScreen.
-        },
+        listener: (context, state) {},
         child: Scaffold(
           appBar: AppBar(
             title:
@@ -220,7 +218,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Sección para la portada
                     Row(
                       children: [
                         AnimatedContainer(
@@ -257,7 +254,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // Campo para descripción
                     TextFormField(
                       controller: _descriptionController,
                       decoration: InputDecoration(
@@ -269,7 +265,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
-                    // Selector de género principal
                     DropdownButtonFormField<String>(
                       value: _selectedMainGenre,
                       decoration: InputDecoration(
@@ -294,7 +289,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                           : null,
                     ),
                     const SizedBox(height: 16),
-                    // Selector de géneros adicionales
                     GestureDetector(
                       onTap: _selectAdditionalGenres,
                       child: InputDecorator(
@@ -313,7 +307,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Nuevo widget para indicar si el libro tendrá capítulos
                     SwitchListTile(
                       title: const Text("¿El libro tendrá capítulos?"),
                       value: _hasChapters,

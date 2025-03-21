@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
@@ -10,8 +12,7 @@ import 'package:books/presentation/widgets/home/book_card.dart';
 import 'package:books/presentation/widgets/home/hamburguer_menu.dart';
 import 'package:books/presentation/widgets/home/recent_books_carousel.dart';
 import 'package:books/presentation/widgets/home/bottom_nav_bar.dart';
-import 'package:books/presentation/widgets/home/small_book_card.dart';
-import 'package:books/presentation/screens/book/book_details.dart';
+import 'package:books/presentation/screens/book/reading/book_details.dart';
 import 'package:books/presentation/widgets/home/lazy_horizontal_book_list.dart';
 import 'dart:async';
 
@@ -89,7 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ..sort((a, b) => b.publicationDate!.compareTo(a.publicationDate!));
           final List<Book> mostRecentBooks = recentBooks.take(10).toList();
 
-          // Solo libros con rating mayor a 4
           final List<Book> bestRatedBooks =
               publishedBooks.where((book) => (book.rating ?? 0) > 4).toList();
 
@@ -146,7 +146,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 8.0),
-                  // Se usa un Padding y un Container con margin y padding interno para que los bordes se vean
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Container(
@@ -161,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  // Espacio extra al final para evitar overflow
                   const SizedBox(height: 40),
                 ],
               ),

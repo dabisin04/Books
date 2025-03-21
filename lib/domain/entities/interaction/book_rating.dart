@@ -5,7 +5,7 @@ class BookRating extends Equatable {
   final String id;
   final String userId;
   final String bookId;
-  final int rating; // Valor entre 1 y 5
+  final int rating;
 
   static const Uuid _uuid = Uuid();
 
@@ -15,9 +15,8 @@ class BookRating extends Equatable {
     required this.bookId,
     required this.rating,
   })  : assert(rating >= 1 && rating <= 5, 'El rating debe estar entre 1 y 5'),
-        id = id ?? _uuid.v4(); // Genera un UUID si no se proporciona
+        id = id ?? _uuid.v4();
 
-  // Convertir a Map para la base de datos
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -27,7 +26,6 @@ class BookRating extends Equatable {
     };
   }
 
-  // Crear instancia desde un Map (BD)
   factory BookRating.fromMap(Map<String, dynamic> map) {
     return BookRating(
       id: map['id'],

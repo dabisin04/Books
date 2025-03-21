@@ -17,7 +17,7 @@ import '../../../widgets/book/custom_quill_tool_bar.dart';
 
 class WriteChapterScreen extends StatefulWidget {
   final Book book;
-  final Chapter? chapter; // Si se pasa, se está editando un capítulo existente
+  final Chapter? chapter;
 
   const WriteChapterScreen({super.key, required this.book, this.chapter});
 
@@ -144,8 +144,6 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
     _previousDelta = _controller.document.toDelta();
     final currentText = _controller.document.toPlainText().trim();
 
-    // Construir un título para el prompt: si el usuario ya ingresó un título, se usa;
-    // de lo contrario, se utiliza el número asignado.
     final chapterTitleOrNumber = _chapterTitleController.text.isNotEmpty
         ? _chapterTitleController.text
         : "Capítulo $_chapterNumber";
@@ -247,7 +245,6 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
         },
         child: Column(
           children: [
-            // Título sin bordes que ocupa todo el ancho (con límite máximo para pantallas grandes)
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

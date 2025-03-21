@@ -43,8 +43,7 @@ class Comment extends Equatable {
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       parentCommentId: parentCommentId ?? this.parentCommentId,
-      rootCommentId: rootCommentId ??
-          this.rootCommentId, // Se mantiene la ID del comentario raíz
+      rootCommentId: rootCommentId ?? this.rootCommentId,
       reports: reports ?? this.reports,
     );
   }
@@ -57,7 +56,7 @@ class Comment extends Equatable {
       'content': content,
       'timestamp': timestamp,
       'parent_comment_id': parentCommentId,
-      'root_comment_id': rootCommentId, // Nuevo campo
+      'root_comment_id': rootCommentId,
       'reports': reports,
     };
   }
@@ -70,7 +69,7 @@ class Comment extends Equatable {
       content: map['content'],
       timestamp: map['timestamp'],
       parentCommentId: map['parent_comment_id'],
-      rootCommentId: map['root_comment_id'], // Nuevo campo
+      rootCommentId: map['root_comment_id'],
       reports: map['reports'],
     );
   }
@@ -83,7 +82,7 @@ class Comment extends Equatable {
         content,
         timestamp,
         parentCommentId,
-        rootCommentId, // Se incluye en `props`
+        rootCommentId,
         reports,
       ];
 }

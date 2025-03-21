@@ -14,7 +14,6 @@ import 'package:books/application/bloc/chapter/chapter_state.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
-import 'package:books/presentation/screens/book/writing/write_book.dart';
 import '../../../widgets/book/comments_box.dart';
 import '../../../widgets/global/custom_button.dart';
 
@@ -30,15 +29,13 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   bool _descriptionExpanded = false;
   final ScrollController _scrollController = ScrollController();
   String? _authorName;
-  Chapter?
-      _recentlyDeletedChapter; // Para almacenar temporalmente el capítulo eliminado
+  Chapter? _recentlyDeletedChapter;
 
   @override
   void initState() {
     super.initState();
     _fetchAuthorName();
     context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
-    // Si el libro tiene capítulos, se dispara la carga de capítulos
     if (widget.book.has_chapters) {
       context.read<ChapterBloc>().add(LoadChaptersByBook(widget.book.id));
     }
@@ -65,12 +62,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
   }
 
-  void _toggleDescription() {
-    setState(() {
-      _descriptionExpanded = !_descriptionExpanded;
-    });
-  }
-
   Future<void> _fetchAuthorName() async {
     final userState = context.read<UserBloc>().state;
     if (userState is UserAuthenticated) {
@@ -89,14 +80,11 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   void _deleteChapter(Chapter chapter) {
-    // Almacena temporalmente el capítulo eliminado
     _recentlyDeletedChapter = chapter;
-    // Envía el evento para eliminar el capítulo
     context
         .read<ChapterBloc>()
         .add(DeleteChapterEvent(chapter.id, widget.book.id));
 
-    // Muestra el SnackBar con la opción "Deshacer"
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Capítulo '${chapter.title}' eliminado"),
@@ -117,7 +105,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   void _editChapter(Chapter chapter) {
-    // Navega a la pantalla de edición de capítulo
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -274,7 +261,6 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                           : 'Leer Libro',
                       onPressed: () {
                         if (widget.book.has_chapters) {
-                          // En caso de libros con capítulos, la lista se muestra en la pantalla
                         } else {
                           Navigator.pushNamed(
                             context,

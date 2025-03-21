@@ -1,3 +1,5 @@
+// ignore_for_file: non_constant_identifier_names
+
 import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:uuid/uuid.dart';
@@ -97,7 +99,6 @@ class Book extends Equatable {
       'rating': rating,
       'ratings_count': ratingsCount,
       'reports': reports,
-      // Se codifica el contenido (Delta) a un JSON string
       'content': content != null ? jsonEncode(content) : null,
       'is_trashed': isTrashed ? 1 : 0,
       'has_chapters': has_chapters ? 1 : 0,
@@ -123,7 +124,6 @@ class Book extends Equatable {
         rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
         ratingsCount: map['ratings_count'] ?? 0,
         reports: map['reports'] ?? 0,
-        // Se decodifica el JSON en un Map
         content: map['content'] != null
             ? jsonDecode(map['content']) as Map<String, dynamic>
             : null,
