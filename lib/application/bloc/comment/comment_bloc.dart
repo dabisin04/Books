@@ -80,9 +80,9 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
   }
 
   Future<void> _onFetchReplies(
-      FetchReplies event, Emitter<CommentState> emit) async {
+    FetchReplies event, Emitter<CommentState> emit) async {
     try {
-      emit(CommentLoading());
+      emit(RepliesLoading());
       final replies = await commentRepository.fetchReplies(event.commentId);
       emit(RepliesLoaded(replies));
     } catch (e, stackTrace) {
