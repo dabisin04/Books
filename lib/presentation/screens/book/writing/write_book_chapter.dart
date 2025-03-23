@@ -153,6 +153,7 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
         title: "${widget.book.title} - $chapterTitleOrNumber",
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
+        isChapterBased: widget.book.has_chapters,
         userPrompt: userPrompt,
         currentContent: currentText,
       );

@@ -175,6 +175,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         title: widget.book.title,
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
+        isChapterBased: widget.book.has_chapters,
         userPrompt: userPrompt,
         currentContent: currentText,
       );

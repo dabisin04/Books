@@ -32,28 +32,46 @@ class GeminiService {
     }
   }
 
+  // Método para obtener sugerencias de capítulos y libros puede recibir capitulos y libros previos
   static Future<String> getBookSuggestion({
     required String title,
     required String primaryGenre,
     List<String>? additionalGenres,
     required String userPrompt,
     required String currentContent,
+    required bool isChapterBased,
+    String? previousChapter,
+    String? previousBook,
   }) async {
     String genreInfo = "Género principal: $primaryGenre";
     if (additionalGenres != null && additionalGenres.isNotEmpty) {
       genreInfo += ", Géneros adicionales: ${additionalGenres.join(", ")}";
     }
 
+    // Agregar contexto según el tipo de libro
+    String context = "";
+    if (isChapterBased &&
+        previousChapter != null &&
+        previousChapter.isNotEmpty) {
+      context =
+          "Aquí tienes el capítulo anterior para mantener la coherencia:\n\n$previousChapter\n\n";
+    } else if (!isChapterBased &&
+        previousBook != null &&
+        previousBook.isNotEmpty) {
+      context =
+          "Aquí tienes un libro previo del usuario para captar su estilo de escritura:\n\n$previousBook\n\n";
+    }
+
     String finalPrompt;
     if (userPrompt.isNotEmpty) {
       finalPrompt =
-          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, $userPrompt. Utiliza el siguiente contenido:\n\n$currentContent";
+          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, $userPrompt. $context Utiliza el siguiente contenido:\n\n$currentContent";
     } else if (currentContent.isNotEmpty) {
       finalPrompt =
-          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. Contenido actual:\n\n$currentContent";
+          "El libro se titula \"$title\". $genreInfo. Sin saludos ni encabezados, continúa la narrativa del libro de forma concisa y sin formatos innecesarios. $context Contenido actual:\n\n$currentContent";
     } else {
       finalPrompt =
-          "El libro se titula \"$title\". $genreInfo. Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
+          "El libro se titula \"$title\". $genreInfo. $context Genera una introducción creativa, inspiradora y original para un libro, sin saludos ni encabezados.";
     }
 
     return getSuggestion(finalPrompt);
