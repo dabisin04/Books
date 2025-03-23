@@ -12,6 +12,7 @@ import '../../../../application/bloc/book/book_event.dart';
 import '../../../../application/bloc/book/book_state.dart';
 import '../../../widgets/book/editable_animated_input_field.dart';
 
+// Crear una lista de géneros disponibles
 const List<String> availableGenres = [
   "Ficción",
   "Fantasía",
@@ -44,6 +45,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
 
   LinearGradient _currentGradient = _generateRandomGradient();
 
+  // Generar un gradiente aleatorio para la portada (Se eliminara en la siguiente versión)
   static LinearGradient _generateRandomGradient() {
     final random = Random();
     Color randomColor() => Color.fromARGB(
@@ -65,6 +67,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
     });
   }
 
+  // Crear un libro con los datos ingresados y navegar a la pantalla de contenido
   void _goToContentScreen() {
     if (_formKey.currentState!.validate()) {
       final updatedBook = widget.book?.copyWith(
@@ -106,6 +109,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
         context.read<BookBloc>().add(AddBook(updatedBook));
       }
 
+      // Basado en si el libro tiene capítulos o no, navegar a la pantalla correspondiente
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -144,33 +148,62 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
     super.dispose();
   }
 
+  // Mostrar un diálogo para seleccionar los géneros adicionales
   Future<void> _selectAdditionalGenres() async {
     final List<String> tempSelected = List.from(_selectedAdditionalGenres);
     final result = await showDialog<List<String>>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Text("Selecciona géneros adicionales"),
           content: SingleChildScrollView(
             child: Column(
-              children: availableGenres.map((genre) {
-                return StatefulBuilder(
-                  builder: (context, setState) {
-                    final selected = tempSelected.contains(genre);
-                    return CheckboxListTile(
-                      title: Text(genre),
-                      value: selected,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          if (value == true) {
-                            tempSelected.add(genre);
-                          } else {
-                            tempSelected.remove(genre);
-                          }
-                        });
-                      },
-                    );
+              // Filtrar los géneros disponibles para que el genero principal no se repita
+              children: availableGenres
+                  .where((genre) => genre != _selectedMainGenre)
+                  .map((genre) {
+                final isSelected = tempSelected.contains(genre);
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (isSelected) {
+                        tempSelected.remove(genre);
+                      } else {
+                        tempSelected.add(genre);
+                      }
+                    });
                   },
+                  // Mostrar un card con el género y un icono de selección
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    color: isSelected
+                        ? Theme.of(context).primaryColor
+                        : Colors.white,
+                    elevation: 4,
+                    child: ListTile(
+                      title: Text(
+                        genre,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      trailing: Icon(
+                        isSelected ? Icons.check_circle : Icons.circle_outlined,
+                        color: isSelected
+                            ? Colors.white
+                            : Theme.of(context).primaryColor,
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  ),
                 );
               }).toList(),
             ),
@@ -197,7 +230,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       onWillPop: () async {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/splash',
+          '/loading',
           (Route<dynamic> route) => false,
           arguments: {'initialTab': 4},
         );
