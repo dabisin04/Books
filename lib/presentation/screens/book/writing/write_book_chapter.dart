@@ -1,6 +1,7 @@
-// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api
+// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api, unused_import, use_super_parameters, unused_field
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:books/domain/ports/book/chapter_repository.dart';
 import 'package:books/presentation/screens/loading.dart';
 import 'package:books/presentation/widgets/book/publication_date.dart';
@@ -12,8 +13,8 @@ import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
-import '../../../../services/gemini_service.dart';
-import '../../../widgets/book/custom_quill_tool_bar.dart';
+import 'package:books/services/gemini_service.dart';
+import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 
 class WriteChapterScreen extends StatefulWidget {
   final Book book;
@@ -28,6 +29,7 @@ class WriteChapterScreen extends StatefulWidget {
 class _WriteChapterScreenState extends State<WriteChapterScreen> {
   late final quill.QuillController _controller;
   final TextEditingController _chapterTitleController = TextEditingController();
+  final TextEditingController _promptController = TextEditingController();
   int _chapterNumber = 1;
   bool _isFetchingSuggestion = false;
   quill.Delta? _previousDelta;
@@ -90,6 +92,7 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
   @override
   void dispose() {
     _chapterTitleController.dispose();
+    _promptController.dispose();
     _discardBannerTimer?.cancel();
     _controller.dispose();
     super.dispose();
@@ -148,21 +151,44 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
         ? _chapterTitleController.text
         : "Capítulo $_chapterNumber";
 
+    String? previousChapterContent;
+    if (_chapterNumber > 1) {
+      try {
+        final chapterRepo = RepositoryProvider.of<ChapterRepository>(context);
+        final chapters = await chapterRepo.fetchChaptersByBook(widget.book.id);
+        final previousChapters = chapters
+            .where((c) => c.chapterNumber == _chapterNumber - 1)
+            .toList();
+        if (previousChapters.isNotEmpty) {
+          final previousChapter = previousChapters.first;
+          if (previousChapter.content != null &&
+              previousChapter.content!['ops'] != null) {
+            try {
+              final doc =
+                  quill.Document.fromJson(previousChapter.content!['ops']);
+              previousChapterContent = doc.toPlainText();
+            } catch (e) {
+              // Si falla la conversión, se ignora.
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint("Error obteniendo capítulo anterior: $e");
+      }
+    }
+
     try {
-      final suggestionText = await GeminiService.getBookSuggestion(
+      final suggestionDelta = await GeminiService.getBookSuggestion(
         title: "${widget.book.title} - $chapterTitleOrNumber",
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
         isChapterBased: widget.book.has_chapters,
         userPrompt: userPrompt,
         currentContent: currentText,
+        previousChapter: previousChapterContent,
+        previousBook: null,
       );
-      String processedSuggestion = suggestionText.trim();
-      if (processedSuggestion.isNotEmpty) {
-        processedSuggestion = processedSuggestion[0].toLowerCase() +
-            processedSuggestion.substring(1);
-      }
-      final suggestionDelta = quill.Delta()..insert(processedSuggestion);
+
       final currentLength = _controller.document.length;
       _suggestionStart = currentLength;
       if (currentLength <= 1) {
@@ -175,9 +201,7 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
       _suggestionEnd = _controller.document.length;
       _controller.updateSelection(
         TextSelection(
-          baseOffset: _suggestionStart,
-          extentOffset: _suggestionEnd,
-        ),
+            baseOffset: _suggestionStart, extentOffset: _suggestionEnd),
         quill.ChangeSource.local,
       );
       setState(() {
@@ -222,6 +246,47 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
         _showDiscardBanner = false;
       });
     }
+  }
+
+  void _showSuggestionPrompt() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _promptController,
+                decoration: const InputDecoration(
+                  hintText: "Ingresa tu sugerencia",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final prompt = _promptController.text.trim();
+                  if (prompt.isNotEmpty) {
+                    Navigator.pop(context);
+                    await _getGeminiSuggestion(prompt);
+                  }
+                },
+                child: const Text("Enviar"),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -301,8 +366,16 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
       ),
       bottomNavigationBar: CustomQuillToolbar(
         controller: _controller,
-        onSuggestionSubmit: _getGeminiSuggestion,
-        isFetching: _isFetchingSuggestion,
+      ),
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _showSuggestionPrompt,
+          label: const Text("Sugerir"),
+          icon: const Icon(Icons.lightbulb_outline),
+        ),
       ),
     );
   }

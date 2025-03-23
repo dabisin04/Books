@@ -230,7 +230,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       onWillPop: () async {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/loading',
+          '/home',
           (Route<dynamic> route) => false,
           arguments: {'initialTab': 4},
         );

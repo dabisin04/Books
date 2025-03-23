@@ -1,5 +1,3 @@
-// ignore_for_file: depend_on_referenced_packages, use_super_parameters, library_private_types_in_public_api, prefer_interpolation_to_compose_strings, sized_box_for_whitespace
-
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:turn_page_transition/turn_page_transition.dart';
@@ -7,11 +5,13 @@ import 'package:turn_page_transition/turn_page_transition.dart';
 class PaginatedBookViewer extends StatefulWidget {
   final quill.Document document;
   final double fontSize;
+  final double textScaleFactor;
 
   const PaginatedBookViewer({
     Key? key,
     required this.document,
     this.fontSize = 16.0,
+    this.textScaleFactor = 1.0,
   }) : super(key: key);
 
   @override
@@ -19,11 +19,150 @@ class PaginatedBookViewer extends StatefulWidget {
 }
 
 class _PaginatedBookViewerState extends State<PaginatedBookViewer> {
-  late List<Widget> pages;
   final TurnPageController _turnPageController = TurnPageController();
+  List<Map<String, dynamic>> _linesWithAttributes = [];
 
-  Widget _buildPageWidget(String text, double fullHeight, TextStyle textStyle,
-      double horizontalPadding, double verticalPadding,
+  @override
+  void initState() {
+    super.initState();
+    _parseDocument();
+  }
+
+  void _parseDocument() {
+    final ops = widget.document.toDelta().toList();
+    _linesWithAttributes.clear();
+    List<TextSpan> currentLine = [];
+
+    for (var op in ops) {
+      final data = op.data;
+      if (data is String) {
+        final parts = data.split('\n');
+        for (int i = 0; i < parts.length; i++) {
+          if (parts[i].isNotEmpty) {
+            currentLine.add(_buildInlineSpan(parts[i], op.attributes));
+          }
+          if (i < parts.length - 1 || data.endsWith('\n')) {
+            if (currentLine.isNotEmpty) {
+              _linesWithAttributes.add({
+                "spans": List<TextSpan>.from(currentLine),
+                "blockAttributes": op.attributes,
+              });
+              currentLine = [];
+            }
+          }
+        }
+      }
+    }
+    if (currentLine.isNotEmpty) {
+      _linesWithAttributes.add({
+        "spans": List<TextSpan>.from(currentLine),
+        "blockAttributes": null,
+      });
+    }
+    debugPrint("Total líneas generadas: ${_linesWithAttributes.length}");
+  }
+
+  TextSpan _buildInlineSpan(String text, Map<String, dynamic>? attrs) {
+    double sizeMultiplier = 1.0;
+    if (attrs != null && attrs.containsKey("size")) {
+      final sizeAttr = attrs["size"];
+      if (sizeAttr is String) {
+        if (sizeAttr == "small")
+          sizeMultiplier = 0.8;
+        else if (sizeAttr == "large")
+          sizeMultiplier = 1.2;
+        else if (sizeAttr == "huge") sizeMultiplier = 1.4;
+      } else if (sizeAttr is num) {
+        sizeMultiplier = sizeAttr.toDouble() / 16.0;
+      }
+    }
+    final effectiveSize =
+        widget.fontSize * widget.textScaleFactor * sizeMultiplier;
+    FontWeight fontWeight = FontWeight.normal;
+    FontStyle fontStyle = FontStyle.normal;
+    TextDecoration? decoration;
+
+    if (attrs != null) {
+      if (attrs['bold'] == true) fontWeight = FontWeight.bold;
+      if (attrs['italic'] == true) fontStyle = FontStyle.italic;
+      if (attrs['underline'] == true) decoration = TextDecoration.underline;
+    }
+    return TextSpan(
+      text: text,
+      style: TextStyle(
+        fontSize: effectiveSize,
+        fontWeight: fontWeight,
+        fontStyle: fontStyle,
+        decoration: decoration,
+        height: 1.4,
+        color: Colors.black,
+      ),
+    );
+  }
+
+  List<Widget> _buildPages(BoxConstraints constraints) {
+    final fullHeight = constraints.maxHeight;
+    const horizontalPadding = 16.0;
+    const verticalPadding = 16.0;
+    final availableHeight = fullHeight - (verticalPadding * 2);
+
+    List<Widget> pages = [];
+    List<Map<String, dynamic>> currentPageLines = [];
+    double currentHeight = 0.0;
+
+    for (int i = 0; i < _linesWithAttributes.length; i++) {
+      final lineData = _linesWithAttributes[i];
+      final lineSpans = lineData["spans"] as List<TextSpan>;
+      final lineHeight = _measureLineHeight(lineSpans, constraints);
+
+      if (lineHeight > availableHeight) {
+        if (currentPageLines.isNotEmpty) {
+          pages.add(
+              _buildPageWidget(currentPageLines, fullHeight, isLast: false));
+          currentPageLines = [];
+          currentHeight = 0;
+        }
+        pages.add(_buildPageWidget([lineData], fullHeight, isLast: false));
+        continue;
+      }
+
+      if (currentHeight + lineHeight > availableHeight &&
+          currentPageLines.isNotEmpty) {
+        pages
+            .add(_buildPageWidget(currentPageLines, fullHeight, isLast: false));
+        currentPageLines = [];
+        currentHeight = 0;
+      }
+
+      currentPageLines.add(lineData);
+      currentHeight += lineHeight;
+    }
+
+    if (currentPageLines.isNotEmpty) {
+      pages.add(_buildPageWidget(currentPageLines, fullHeight, isLast: true));
+    }
+
+    debugPrint("Número total de páginas generadas: ${pages.length}");
+    return pages;
+  }
+
+  double _measureLineHeight(
+      List<TextSpan> lineSpans, BoxConstraints constraints) {
+    final textPainter = TextPainter(
+      text: TextSpan(children: lineSpans),
+      textDirection: TextDirection.ltr,
+      maxLines: null,
+    );
+    textPainter.layout(
+      maxWidth: constraints.maxWidth - (horizontalPadding * 2),
+    );
+    return textPainter.height;
+  }
+
+  static const double horizontalPadding = 16.0;
+
+  Widget _buildPageWidget(
+      List<Map<String, dynamic>> pageLines, double fullHeight,
       {required bool isLast}) {
     return Container(
       color: Colors.white,
@@ -32,18 +171,36 @@ class _PaginatedBookViewerState extends State<PaginatedBookViewer> {
         children: [
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.only(top: 20),
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding, vertical: verticalPadding),
-                child: Text(
-                  text,
-                  style: textStyle,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: horizontalPadding, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: pageLines.map((lineData) {
+                    final spans = lineData["spans"] as List<TextSpan>;
+                    final blockAttributes =
+                        lineData["blockAttributes"] as Map<String, dynamic>?;
+                    int indentLevel = 0;
+                    if (blockAttributes != null &&
+                        blockAttributes.containsKey("indent")) {
+                      indentLevel = blockAttributes["indent"] is int
+                          ? blockAttributes["indent"] as int
+                          : 0;
+                    }
+                    final indentPadding = indentLevel * 20.0;
+                    return Padding(
+                      padding: EdgeInsets.only(left: indentPadding),
+                      child: RichText(
+                        text: TextSpan(children: spans),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),
           ),
-          Container(
+          SizedBox(
             height: 20,
             child: Center(
               child: isLast
@@ -56,85 +213,11 @@ class _PaginatedBookViewerState extends State<PaginatedBookViewer> {
     );
   }
 
-  List<Widget> _buildPagesAdvanced(BoxConstraints constraints) {
-    final plainText = widget.document.toPlainText();
-    debugPrint("Texto extraído en PaginatedBookViewer:\n$plainText");
-
-    List<String> paragraphs =
-        plainText.split("\n\n").map((p) => p.trim()).toList();
-    paragraphs.removeWhere((p) => p.isEmpty);
-
-    final textStyle = TextStyle(fontSize: widget.fontSize);
-    const horizontalPadding = 16.0;
-    const verticalPadding = 16.0;
-    final fullHeight = constraints.maxHeight;
-    final availableHeight = fullHeight - (verticalPadding * 2);
-
-    List<Widget> generatedPages = [];
-    List<String> currentPageParagraphs = [];
-
-    double measureHeight(String text) {
-      final textPainter = TextPainter(
-        text: TextSpan(text: text, style: textStyle),
-        textDirection: TextDirection.ltr,
-        maxLines: null,
-      );
-      textPainter.layout(
-          maxWidth: constraints.maxWidth - (horizontalPadding * 2));
-      return textPainter.height;
-    }
-
-    for (int i = 0; i < paragraphs.length; i++) {
-      String para = paragraphs[i];
-      if (i == paragraphs.length - 1) {
-        currentPageParagraphs.add(para);
-        String pageText = currentPageParagraphs.join("\n\n");
-        generatedPages.add(_buildPageWidget(
-            pageText, fullHeight, textStyle, horizontalPadding, verticalPadding,
-            isLast: true));
-        currentPageParagraphs = [];
-        break;
-      }
-      String tentative = currentPageParagraphs.isEmpty
-          ? para
-          : currentPageParagraphs.join("\n\n") + "\n\n" + para;
-      double tentativeHeight = measureHeight(tentative);
-
-      if (currentPageParagraphs.length < 2) {
-        currentPageParagraphs.add(para);
-      } else {
-        if (tentativeHeight <= availableHeight) {
-          currentPageParagraphs.add(para);
-        } else {
-          if (currentPageParagraphs.length >= 3) {
-            String pageText = currentPageParagraphs.join("\n\n");
-            generatedPages.add(_buildPageWidget(pageText, fullHeight, textStyle,
-                horizontalPadding, verticalPadding,
-                isLast: false));
-            currentPageParagraphs = [];
-            currentPageParagraphs.add(para);
-          } else {
-            currentPageParagraphs.add(para);
-          }
-        }
-      }
-    }
-    if (currentPageParagraphs.isNotEmpty) {
-      String pageText = currentPageParagraphs.join("\n\n");
-      generatedPages.add(_buildPageWidget(
-          pageText, fullHeight, textStyle, horizontalPadding, verticalPadding,
-          isLast: true));
-    }
-
-    debugPrint("Número total de páginas generadas: ${generatedPages.length}");
-    return generatedPages;
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        pages = _buildPagesAdvanced(constraints);
+        final pages = _buildPages(constraints);
         return TurnPageView.builder(
           controller: _turnPageController,
           itemCount: pages.length,

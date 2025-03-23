@@ -26,7 +26,12 @@ class HamburguerMenu extends StatelessWidget {
             title: const Text('Perfil'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacementNamed(context, '/profile');
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/home',
+                (Route<dynamic> route) => false,
+                arguments: {'initialTab': 4},
+              );
             },
           ),
           ListTile(

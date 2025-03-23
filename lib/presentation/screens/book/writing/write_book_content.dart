@@ -1,25 +1,26 @@
-// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api
+// ignore_for_file: unused_import, unused_field, library_private_types_in_public_api, use_super_parameters
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
-import 'package:flutter_quill/quill_delta.dart' as quill;
-import 'package:html/dom.dart' as dom;
-import 'package:html/parser.dart' show parse;
 import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
-import '../../../../services/gemini_service.dart';
-import '../../../widgets/book/custom_quill_tool_bar.dart';
-import '../../../widgets/book/publication_date_selector.dart';
-import '../../loading.dart';
+import 'package:books/application/bloc/book/book_state.dart';
+import 'package:books/services/gemini_service.dart';
+import 'package:books/presentation/screens/loading.dart';
+import 'package:books/presentation/widgets/book/publication_date_selector.dart';
+import 'package:flutter_quill/quill_delta.dart' as quill;
+import 'package:html/parser.dart' show parse;
 
 class WriteBookContentScreen extends StatefulWidget {
   final Book book;
 
-  const WriteBookContentScreen({super.key, required this.book});
+  const WriteBookContentScreen({Key? key, required this.book})
+      : super(key: key);
 
   @override
   _WriteBookContentScreenState createState() => _WriteBookContentScreenState();
@@ -34,6 +35,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   int _suggestionStart = 0;
   int _suggestionEnd = 0;
   Timer? _discardBannerTimer;
+  final TextEditingController _promptController = TextEditingController();
 
   @override
   void initState() {
@@ -60,6 +62,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   @override
   void dispose() {
     _discardBannerTimer?.cancel();
+    _promptController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -101,68 +104,6 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     );
   }
 
-  quill.Delta htmlToDelta(String html) {
-    final document = parse(html);
-    final delta = quill.Delta();
-
-    void processNode(dom.Node node) {
-      if (node is dom.Text) {
-        delta.insert(node.text);
-      } else if (node is dom.Element) {
-        switch (node.localName) {
-          case 'p':
-            for (var child in node.nodes) {
-              processNode(child);
-            }
-            delta.insert('\n');
-            break;
-          case 'strong':
-          case 'b':
-            final attributes = {'bold': true};
-            for (var child in node.nodes) {
-              if (child is dom.Text) {
-                delta.insert(child.text, attributes);
-              } else {
-                processNode(child);
-              }
-            }
-            break;
-          case 'ul':
-            for (var child in node.nodes) {
-              if (child is dom.Element && child.localName == 'li') {
-                for (var liChild in child.nodes) {
-                  processNode(liChild);
-                }
-                delta.insert('\n', {'list': 'bullet'});
-              }
-            }
-            break;
-          case 'ol':
-            for (var child in node.nodes) {
-              if (child is dom.Element && child.localName == 'li') {
-                for (var liChild in child.nodes) {
-                  processNode(liChild);
-                }
-                delta.insert('\n', {'list': 'ordered'});
-              }
-            }
-            break;
-          default:
-            for (var child in node.nodes) {
-              processNode(child);
-            }
-            break;
-        }
-      }
-    }
-
-    for (var node in document.body!.nodes) {
-      processNode(node);
-    }
-
-    return delta;
-  }
-
   Future<void> _getGeminiSuggestion(String userPrompt) async {
     setState(() {
       _isFetchingSuggestion = true;
@@ -170,21 +111,44 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     _previousDelta = _controller.document.toDelta();
     final currentText = _controller.document.toPlainText().trim();
 
+    String? previousBookContent;
+    if (!widget.book.has_chapters) {
+      final bookState = context.read<BookBloc>().state;
+      if (bookState is BookLoaded) {
+        final previousBooks = bookState.books
+            .where((b) =>
+                b.id != widget.book.id && b.authorId == widget.book.authorId)
+            .toList();
+        if (previousBooks.isNotEmpty) {
+          previousBooks.sort((a, b) {
+            return (b.publicationDate ?? DateTime.now())
+                .compareTo(a.publicationDate ?? DateTime.now());
+          });
+          final previousBook = previousBooks.first;
+          if (previousBook.content != null &&
+              previousBook.content!['ops'] != null) {
+            try {
+              final doc = quill.Document.fromJson(previousBook.content!['ops']);
+              previousBookContent = doc.toPlainText();
+            } catch (e) {
+              // Si falla la conversión, se deja como null.
+            }
+          }
+        }
+      }
+    }
+
     try {
-      final suggestionText = await GeminiService.getBookSuggestion(
+      final suggestionDelta = await GeminiService.getBookSuggestion(
         title: widget.book.title,
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
         isChapterBased: widget.book.has_chapters,
         userPrompt: userPrompt,
         currentContent: currentText,
+        previousBook: previousBookContent,
       );
-      String processedSuggestion = suggestionText.trim();
-      if (processedSuggestion.isNotEmpty) {
-        processedSuggestion = processedSuggestion[0].toLowerCase() +
-            processedSuggestion.substring(1);
-      }
-      final suggestionDelta = quill.Delta()..insert(processedSuggestion);
+
       final currentLength = _controller.document.length;
       _suggestionStart = currentLength;
       if (currentLength <= 1) {
@@ -242,6 +206,47 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         _showDiscardBanner = false;
       });
     }
+  }
+
+  void _showSuggestionPrompt() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _promptController,
+                decoration: const InputDecoration(
+                  hintText: "Ingresa tu sugerencia",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final prompt = _promptController.text.trim();
+                  if (prompt.isNotEmpty) {
+                    Navigator.pop(context);
+                    await _getGeminiSuggestion(prompt);
+                  }
+                },
+                child: const Text("Enviar"),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -315,10 +320,16 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: CustomQuillToolbar(
-        controller: _controller,
-        onSuggestionSubmit: _getGeminiSuggestion,
-        isFetching: _isFetchingSuggestion,
+      bottomNavigationBar: CustomQuillToolbar(controller: _controller),
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: _showSuggestionPrompt,
+          label: const Text("Sugerir"),
+          icon: const Icon(Icons.lightbulb_outline),
+        ),
       ),
     );
   }

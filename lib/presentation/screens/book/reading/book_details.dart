@@ -1,4 +1,4 @@
-// ignore_for_file: library_private_types_in_public_api
+// ignore_for_file: library_private_types_in_public_api, no_leading_underscores_for_local_identifiers
 import 'dart:math';
 import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 import 'package:books/presentation/widgets/book/book_options.dart';
@@ -254,23 +254,20 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Center(
-                    child: CustomButton(
-                      text: widget.book.has_chapters
-                          ? 'Ver Capítulos'
-                          : 'Leer Libro',
-                      onPressed: () {
-                        if (widget.book.has_chapters) {
-                        } else {
-                          Navigator.pushNamed(
-                            context,
-                            '/read_content',
-                            arguments: widget.book,
-                          );
-                        }
-                      },
-                    ),
-                  ),
+                  widget.book.has_chapters
+                      ? const SizedBox.shrink()
+                      : Center(
+                          child: CustomButton(
+                            text: 'Leer Libro',
+                            onPressed: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/read_content',
+                                arguments: widget.book,
+                              );
+                            },
+                          ),
+                        ),
                   const SizedBox(height: 16),
                   if (widget.book.has_chapters) ...[
                     const Text(
@@ -279,58 +276,83 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                           TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
-                    BlocBuilder<ChapterBloc, ChapterState>(
-                      builder: (context, state) {
-                        if (state is ChapterLoading) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        } else if (state is ChapterLoaded) {
-                          final chapters = state.chapters;
-                          if (chapters.isEmpty) {
-                            return const Text("No se encontraron capítulos.");
-                          }
-                          return ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: chapters.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(),
-                            itemBuilder: (context, index) {
-                              final chapter = chapters[index];
-                              return ListTile(
-                                title: Text(
-                                    "Capítulo ${chapter.chapterNumber}: ${chapter.title}"),
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/read_content',
-                                    arguments: chapter,
-                                  );
-                                },
-                                trailing: isAuthor
-                                    ? Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.edit),
-                                            onPressed: () =>
-                                                _editChapter(chapter),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete),
-                                            onPressed: () =>
-                                                _deleteChapter(chapter),
-                                          ),
-                                        ],
-                                      )
-                                    : null,
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        return BlocBuilder<ChapterBloc, ChapterState>(
+                          builder: (context, state) {
+                            if (state is ChapterLoading) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            } else if (state is ChapterLoaded) {
+                              final chapters = state.chapters;
+                              if (chapters.isEmpty) {
+                                return const Text(
+                                    "No se encontraron capítulos.");
+                              }
+                              int _visibleChapterCount = 3;
+                              final visibleChapters =
+                                  chapters.take(_visibleChapterCount).toList();
+                              return Column(
+                                children: [
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: visibleChapters.length,
+                                    separatorBuilder: (context, index) =>
+                                        const Divider(),
+                                    itemBuilder: (context, index) {
+                                      final chapter = visibleChapters[index];
+                                      return ListTile(
+                                        title: Text(
+                                            "Capítulo ${chapter.chapterNumber}: ${chapter.title}"),
+                                        onTap: () {
+                                          Navigator.pushNamed(
+                                            context,
+                                            '/read_content',
+                                            arguments: chapter,
+                                          );
+                                        },
+                                        trailing: isAuthor
+                                            ? Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    icon:
+                                                        const Icon(Icons.edit),
+                                                    onPressed: () =>
+                                                        _editChapter(chapter),
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(
+                                                        Icons.delete),
+                                                    onPressed: () =>
+                                                        _deleteChapter(chapter),
+                                                  ),
+                                                ],
+                                              )
+                                            : null,
+                                      );
+                                    },
+                                  ),
+                                  if (_visibleChapterCount < chapters.length)
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _visibleChapterCount =
+                                              chapters.length;
+                                        });
+                                      },
+                                      child: const Text("Cargar más capítulos"),
+                                    ),
+                                ],
                               );
-                            },
-                          );
-                        } else {
-                          return const Center(
-                              child: Text("Error al cargar capítulos."));
-                        }
+                            } else {
+                              return const Center(
+                                  child: Text("Error al cargar capítulos."));
+                            }
+                          },
+                        );
                       },
                     ),
                   ],
