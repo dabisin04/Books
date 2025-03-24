@@ -30,3 +30,17 @@ class UserError extends UserState {
   @override
   List<Object?> get props => [message];
 }
+
+class UserUpdated extends UserState {
+  final User user;
+  const UserUpdated({required this.user});
+  @override
+  List<Object?> get props => [user];
+}
+
+class UserPasswordChanged extends UserState {
+  final User user;
+  const UserPasswordChanged({required this.user});
+  @override
+  List<Object?> get props => [user];
+}

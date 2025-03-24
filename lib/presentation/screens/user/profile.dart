@@ -1,4 +1,5 @@
 // ignore_for_file: use_build_context_synchronously, unused_element_parameter, library_private_types_in_public_api, deprecated_member_use
+import 'package:books/presentation/widgets/user/profile_options_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
@@ -177,7 +178,14 @@ class _ProfileScreenContent extends StatelessWidget {
                               ),
                               CustomButton(
                                 text: 'Editar',
-                                onPressed: () {},
+                                onPressed: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (context) =>
+                                        const ProfileOptionsModal(),
+                                  );
+                                },
                               ),
                             ],
                           ),

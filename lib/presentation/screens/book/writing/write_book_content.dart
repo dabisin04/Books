@@ -1,8 +1,9 @@
-// ignore_for_file: unused_import, unused_field, library_private_types_in_public_api, use_super_parameters
+// ignore_for_file: unused_import, unused_field, library_private_types_in_public_api, use_super_parameters, use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:convert';
 import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
+import 'package:books/presentation/widgets/book/publication_date.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -68,6 +69,16 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   }
 
   Future<void> _finishBookCreation() async {
+    if (widget.book.publicationDate == null) {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          return PublicationDateModal(book: widget.book);
+        },
+      );
+    }
+
     final deltaJson = _controller.document.toDelta().toJson();
     final contentMap = {'ops': deltaJson};
 
@@ -209,6 +220,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
   }
 
   void _showSuggestionPrompt() {
+    _promptController.clear();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -232,6 +244,9 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
               ),
               const SizedBox(height: 8),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                ),
                 onPressed: () async {
                   final prompt = _promptController.text.trim();
                   if (prompt.isNotEmpty) {
@@ -275,14 +290,6 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         },
         child: Column(
           children: [
-            PublicationDateSelector(
-              initialDate: _selectedPublicationDate,
-              onDateSelected: (selectedDate) {
-                setState(() {
-                  _selectedPublicationDate = selectedDate;
-                });
-              },
-            ),
             Expanded(
               child: Stack(
                 children: [
@@ -323,11 +330,11 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
       bottomNavigationBar: CustomQuillToolbar(controller: _controller),
       floatingActionButton: Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 4,
         ),
         child: FloatingActionButton.extended(
           onPressed: _showSuggestionPrompt,
-          label: const Text("Sugerir"),
+          label: const Text("Sugerencia"),
           icon: const Icon(Icons.lightbulb_outline),
         ),
       ),

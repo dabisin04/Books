@@ -1,3 +1,4 @@
+import 'package:books/domain/entities/user/user.dart';
 import 'package:equatable/equatable.dart';
 
 abstract class UserEvent extends Equatable {
@@ -40,6 +41,23 @@ class RegisterUser extends UserEvent {
 
   @override
   List<Object?> get props => [username, email, password];
+}
+
+class UpdateUserDetails extends UserEvent {
+  final User updatedUser;
+  const UpdateUserDetails({required this.updatedUser});
+  @override
+  List<Object?> get props => [updatedUser];
+}
+
+class ChangePassword extends UserEvent {
+  final String userId;
+  final String newPassword;
+
+  const ChangePassword({required this.userId, required this.newPassword});
+
+  @override
+  List<Object?> get props => [userId, newPassword];
 }
 
 class CheckUserSession extends UserEvent {}

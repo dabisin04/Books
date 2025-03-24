@@ -62,6 +62,22 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   @override
+  Future<void> updateUser(User user) async {
+    final db = await _database;
+    await db
+        .update('users', user.toMap(), where: 'id = ?', whereArgs: [user.id]);
+  }
+
+  @override
+  Future<void> changePassword(String userId, String newPassword) async {
+    final db = await _database;
+    final salt = _generateSalt();
+    final hashedPassword = _hashPassword(newPassword, salt);
+    await db.update('users', {'password': hashedPassword, 'salt': salt},
+        where: 'id = ?', whereArgs: [userId]);
+  }
+
+  @override
   Future<User?> getUserById(String userId) async {
     final db = await _database;
     final result =
@@ -75,24 +91,10 @@ class UserRepositoryImpl implements UserRepository {
     return result.map((user) => User.fromMap(user)).toList();
   }
 
-  Future<void> updateUser(User user) async {
-    final db = await _database;
-    await db
-        .update('users', user.toMap(), where: 'id = ?', whereArgs: [user.id]);
-  }
-
   @override
   Future<void> updateUserBio(String userId, String bio) async {
     final db = await _database;
     await db.update('users', {'bio': bio},
-        where: 'id = ?', whereArgs: [userId]);
-  }
-
-  Future<void> changePassword(String userId, String newPassword) async {
-    final db = await _database;
-    final salt = _generateSalt();
-    final hashedPassword = _hashPassword(newPassword, salt);
-    await db.update('users', {'password': hashedPassword, 'salt': salt},
         where: 'id = ?', whereArgs: [userId]);
   }
 

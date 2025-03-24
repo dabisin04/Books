@@ -14,6 +14,8 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     on<LoadUserData>(_onLoadUserData);
     on<RegisterUser>(_onRegisterUser);
     on<CheckUserSession>(_onCheckUserSession);
+    on<UpdateUserDetails>(_onUpdateUserDetails);
+    on<ChangePassword>(_onChangePassword);
   }
 
   Future<void> _onLoginUser(LoginUser event, Emitter<UserState> emit) async {
@@ -92,6 +94,34 @@ class UserBloc extends Bloc<UserEvent, UserState> {
         emit(UserAuthenticated(user: user));
       } else {
         emit(UserUnauthenticated());
+      }
+    } catch (e) {
+      emit(UserError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateUserDetails(
+      UpdateUserDetails event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    try {
+      await userRepository.updateUser(event.updatedUser);
+      emit(UserUpdated(user: event.updatedUser));
+    } catch (e) {
+      emit(UserError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onChangePassword(
+      ChangePassword event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    try {
+      await userRepository.changePassword(event.userId, event.newPassword);
+      // Tras actualizar, se recupera la información actualizada del usuario
+      final updatedUser = await userRepository.getUserById(event.userId);
+      if (updatedUser != null) {
+        emit(UserPasswordChanged(user: updatedUser));
+      } else {
+        emit(const UserError(message: "Error al actualizar la contraseña"));
       }
     } catch (e) {
       emit(UserError(message: e.toString()));

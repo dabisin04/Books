@@ -1,4 +1,4 @@
-// ignore_for_file: depend_on_referenced_packages
+// ignore_for_file: unused_import
 
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/user/user_event.dart';
@@ -33,6 +33,9 @@ import 'package:books/presentation/screens/book/writing/write_book.dart';
 import 'package:books/presentation/screens/book/writing/write_book_content.dart';
 import 'package:books/presentation/screens/book/reading/read_contet.dart';
 import 'package:books/presentation/screens/book/trashing/thrash_bin.dart';
+// Rutas nuevas:
+import 'package:books/presentation/screens/user/edit_profile.dart';
+import 'package:books/presentation/screens/user/change_password.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -128,6 +131,8 @@ class MyApp extends StatelessWidget {
               return BookDetailsScreen(book: book);
             },
             '/profile': (context) => const ProfileScreen(),
+            '/edit_profile': (context) => const EditProfileScreen(),
+            '/change_password': (context) => const ChangePasswordScreen(),
             '/write_book': (context) => const WriteBookScreen(),
             '/write_content': (context) {
               final book = ModalRoute.of(context)!.settings.arguments as Book;

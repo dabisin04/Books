@@ -3,6 +3,8 @@ import '../../entities/user/user.dart';
 abstract class UserRepository {
   Future<void> registerUser(User user);
   Future<User?> loginUser(String email, String password);
+  Future<void> updateUser(User user);
+  Future<void> changePassword(String userId, String newPassword);
   Future<User?> getUserById(String userId);
   Future<void> updateUserBio(String userId, String bio);
   Future<void> deleteUser(String userId);

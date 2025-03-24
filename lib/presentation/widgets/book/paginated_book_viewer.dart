@@ -1,3 +1,5 @@
+// ignore_for_file: unused_local_variable, prefer_final_fields, library_private_types_in_public_api, use_super_parameters
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:turn_page_transition/turn_page_transition.dart';
@@ -67,11 +69,13 @@ class _PaginatedBookViewerState extends State<PaginatedBookViewer> {
     if (attrs != null && attrs.containsKey("size")) {
       final sizeAttr = attrs["size"];
       if (sizeAttr is String) {
-        if (sizeAttr == "small")
+        if (sizeAttr == "small") {
           sizeMultiplier = 0.8;
-        else if (sizeAttr == "large")
+        } else if (sizeAttr == "large") {
           sizeMultiplier = 1.2;
-        else if (sizeAttr == "huge") sizeMultiplier = 1.4;
+        } else if (sizeAttr == "huge") {
+          sizeMultiplier = 1.4;
+        }
       } else if (sizeAttr is num) {
         sizeMultiplier = sizeAttr.toDouble() / 16.0;
       }

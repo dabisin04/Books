@@ -150,70 +150,86 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
 
   // Mostrar un diálogo para seleccionar los géneros adicionales
   Future<void> _selectAdditionalGenres() async {
-    final List<String> tempSelected = List.from(_selectedAdditionalGenres);
+    // Se parte de la lista actual de géneros seleccionados
+    final List<String> selected = List.from(_selectedAdditionalGenres);
     final result = await showDialog<List<String>>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text("Selecciona géneros adicionales"),
-          content: SingleChildScrollView(
-            child: Column(
-              // Filtrar los géneros disponibles para que el genero principal no se repita
-              children: availableGenres
-                  .where((genre) => genre != _selectedMainGenre)
-                  .map((genre) {
-                final isSelected = tempSelected.contains(genre);
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        tempSelected.remove(genre);
-                      } else {
-                        tempSelected.add(genre);
-                      }
-                    });
-                  },
-                  // Mostrar un card con el género y un icono de selección
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    color: isSelected
-                        ? Theme.of(context).primaryColor
-                        : Colors.white,
-                    elevation: 4,
-                    child: ListTile(
-                      title: Text(
-                        genre,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black,
-                        ),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            // Los géneros disponibles son los que no están ya seleccionados y que no sean el principal
+            final available = availableGenres
+                .where((genre) =>
+                    genre != _selectedMainGenre && !selected.contains(genre))
+                .toList();
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text("Selecciona géneros adicionales"),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Se muestran los géneros ya seleccionados como chips
+                    if (selected.isNotEmpty) ...[
+                      const Text("Seleccionados:"),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: selected.map((genre) {
+                          return Chip(
+                            label: Text(genre),
+                            onDeleted: () {
+                              setState(() {
+                                selected.remove(genre);
+                              });
+                            },
+                          );
+                        }).toList(),
                       ),
-                      trailing: Icon(
-                        isSelected ? Icons.check_circle : Icons.circle_outlined,
-                        color: isSelected
-                            ? Colors.white
-                            : Theme.of(context).primaryColor,
-                      ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16),
+                      const Divider(),
+                    ],
+                    const Text("Disponibles:"),
+                    const SizedBox(height: 8),
+                    // Se muestran los géneros disponibles (solo los que no están seleccionados)
+                    Column(
+                      children: available.map((genre) {
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              selected.add(genre);
+                            });
+                          },
+                          child: Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            color: Theme.of(context).primaryColor,
+                            elevation: 4,
+                            child: ListTile(
+                              title: Text(
+                                genre,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, tempSelected),
-              child: const Text("OK"),
-            ),
-          ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text("OK"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
