@@ -12,7 +12,7 @@ import '../../../../application/bloc/book/book_event.dart';
 import '../../../../application/bloc/book/book_state.dart';
 import '../../../widgets/book/editable_animated_input_field.dart';
 
-// Crear una lista de géneros disponibles
+// Lista de géneros para libros
 const List<String> availableGenres = [
   "Ficción",
   "Fantasía",
@@ -27,6 +27,49 @@ const List<String> availableGenres = [
   "Autoayuda",
 ];
 
+// Géneros para artículos (u otros contenidos no libro)
+const List<String> availableArticleGenres = [
+  "Científico",
+  "Tecnología",
+  "Salud",
+  "Economía",
+  "Educación",
+  "Política",
+  "Cultura",
+  "Opinión",
+  "Deportes",
+];
+
+// Lista de tipos de contenido (valores internos)
+const List<String> availableContentTypes = [
+  "book",
+  "article",
+  "review",
+  "essay",
+  "research",
+  "blog",
+  "news",
+  "novel",
+  "short_story",
+  "tutorial",
+  "guide",
+];
+
+// Mapeo para mostrar nombres amigables
+final Map<String, String> contentTypeDisplayNames = {
+  "book": "Libro",
+  "article": "Artículo",
+  "review": "Reseña",
+  "essay": "Ensayo",
+  "research": "Investigación",
+  "blog": "Blog",
+  "news": "Noticias",
+  "novel": "Novela",
+  "short_story": "Cuento",
+  "tutorial": "Tutorial",
+  "guide": "Guía",
+};
+
 class WriteBookScreen extends StatefulWidget {
   final Book? book;
   const WriteBookScreen({super.key, this.book});
@@ -39,13 +82,17 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+
+  // Género principal y adicionales según tipo de contenido
   String? _selectedMainGenre;
   List<String> _selectedAdditionalGenres = [];
   bool _hasChapters = false;
 
+  // Nuevo: Tipo de contenido, valor interno; por defecto "book"
+  String _selectedContentType = "book";
+
   LinearGradient _currentGradient = _generateRandomGradient();
 
-  // Generar un gradiente aleatorio para la portada (Se eliminara en la siguiente versión)
   static LinearGradient _generateRandomGradient() {
     final random = Random();
     Color randomColor() => Color.fromARGB(
@@ -67,7 +114,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
     });
   }
 
-  // Crear un libro con los datos ingresados y navegar a la pantalla de contenido
   void _goToContentScreen() {
     if (_formKey.currentState!.validate()) {
       final updatedBook = widget.book?.copyWith(
@@ -75,9 +121,10 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
             description: _descriptionController.text.trim().isEmpty
                 ? null
                 : _descriptionController.text.trim(),
-            genre: _selectedMainGenre ?? widget.book!.genre,
+            genre: _selectedMainGenre ?? '',
             additionalGenres: _selectedAdditionalGenres,
             has_chapters: _hasChapters,
+            contentType: _selectedContentType,
           ) ??
           Book(
             title: _titleController.text.trim(),
@@ -95,6 +142,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
             reports: 0,
             content: null,
             has_chapters: _hasChapters,
+            contentType: _selectedContentType,
           );
 
       if (widget.book != null) {
@@ -104,12 +152,12 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
               description: updatedBook.description,
               genre: updatedBook.genre,
               additionalGenres: updatedBook.additionalGenres,
+              contentType: updatedBook.contentType,
             ));
       } else {
         context.read<BookBloc>().add(AddBook(updatedBook));
       }
 
-      // Basado en si el libro tiene capítulos o no, navegar a la pantalla correspondiente
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -130,6 +178,7 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
       _selectedMainGenre = widget.book!.genre;
       _selectedAdditionalGenres = widget.book!.additionalGenres;
       _hasChapters = widget.book!.has_chapters;
+      _selectedContentType = widget.book!.contentType;
     }
     _titleController.addListener(_onTitleChanged);
     _descriptionController.addListener(() {
@@ -148,17 +197,26 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
     super.dispose();
   }
 
-  // Mostrar un diálogo para seleccionar los géneros adicionales
   Future<void> _selectAdditionalGenres() async {
-    // Se parte de la lista actual de géneros seleccionados
+    // Si el contenido no es libro o novela, se omite esta opción.
+    if (_selectedContentType != 'book' && _selectedContentType != 'novel') {
+      setState(() {
+        _selectedAdditionalGenres = [];
+      });
+      return;
+    }
+
     final List<String> selected = List.from(_selectedAdditionalGenres);
     final result = await showDialog<List<String>>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            // Los géneros disponibles son los que no están ya seleccionados y que no sean el principal
-            final available = availableGenres
+            final List<String> currentAvailableGenres =
+                (_selectedContentType == 'article')
+                    ? availableArticleGenres
+                    : availableGenres;
+            final available = currentAvailableGenres
                 .where((genre) =>
                     genre != _selectedMainGenre && !selected.contains(genre))
                 .toList();
@@ -171,7 +229,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Se muestran los géneros ya seleccionados como chips
                     if (selected.isNotEmpty) ...[
                       const Text("Seleccionados:"),
                       const SizedBox(height: 8),
@@ -193,7 +250,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                     ],
                     const Text("Disponibles:"),
                     const SizedBox(height: 8),
-                    // Se muestran los géneros disponibles (solo los que no están seleccionados)
                     Column(
                       children: available.map((genre) {
                         return GestureDetector(
@@ -242,6 +298,11 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Si el contenido es libro o novela, usamos availableGenres, de lo contrario availableArticleGenres.
+    final bool isBookOrNovel =
+        _selectedContentType == 'book' || _selectedContentType == 'novel';
+    final List<String> currentAvailableGenres =
+        isBookOrNovel ? availableGenres : availableArticleGenres;
     return WillPopScope(
       onWillPop: () async {
         Navigator.pushNamedAndRemoveUntil(
@@ -314,15 +375,49 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
+                    // Dropdown para seleccionar el tipo de contenido con menos padding
+                    DropdownButtonFormField<String>(
+                      value: _selectedContentType,
+                      decoration: const InputDecoration(
+                        labelText: "Tipo de contenido",
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                      items: availableContentTypes.map((type) {
+                        return DropdownMenuItem(
+                          value: type,
+                          child: Text(contentTypeDisplayNames[type] ??
+                              type.toUpperCase()),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedContentType = value;
+                            _selectedMainGenre = null;
+                            // Si el contenido no es libro o novela, limpiamos los géneros adicionales
+                            if (!isBookOrNovel) {
+                              _selectedAdditionalGenres = [];
+                            }
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // Dropdown para género principal, el label cambia a "Enfoque" si no es libro/novela
                     DropdownButtonFormField<String>(
                       value: _selectedMainGenre,
                       decoration: InputDecoration(
-                        labelText: "Género Principal",
+                        labelText:
+                            isBookOrNovel ? "Género Principal" : "Enfoque",
                         border: _selectedMainGenre == null
                             ? const OutlineInputBorder()
                             : InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
                       ),
-                      items: availableGenres.map((genre) {
+                      items: currentAvailableGenres.map((genre) {
                         return DropdownMenuItem(
                           value: genre,
                           child: Text(genre),
@@ -334,40 +429,51 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                         });
                       },
                       validator: (value) => value == null || value.isEmpty
-                          ? "Selecciona el género principal"
+                          ? "Selecciona ${isBookOrNovel ? 'el género principal' : 'un enfoque'}"
                           : null,
                     ),
                     const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: _selectAdditionalGenres,
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: "Géneros adicionales",
-                          border: _selectedAdditionalGenres.isEmpty
-                              ? const OutlineInputBorder()
-                              : InputBorder.none,
-                        ),
-                        child: Text(
-                          _selectedAdditionalGenres.isEmpty
-                              ? "Selecciona géneros adicionales (opcional)"
-                              : _selectedAdditionalGenres.join(', '),
-                          style: const TextStyle(fontSize: 16),
+                    // Mostrar géneros adicionales solo si es libro o novela
+                    if (isBookOrNovel)
+                      GestureDetector(
+                        onTap: _selectAdditionalGenres,
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: "Géneros adicionales",
+                            border: _selectedAdditionalGenres.isEmpty
+                                ? const OutlineInputBorder()
+                                : InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 8),
+                          ),
+                          child: Text(
+                            _selectedAdditionalGenres.isEmpty
+                                ? "Selecciona géneros adicionales (opcional)"
+                                : _selectedAdditionalGenres.join(', '),
+                            style: const TextStyle(fontSize: 16),
+                          ),
                         ),
                       ),
-                    ),
                     const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text("¿El libro tendrá capítulos?"),
-                      value: _hasChapters,
-                      onChanged: (bool value) {
-                        setState(() {
-                          _hasChapters = value;
-                        });
-                      },
-                      secondary: Icon(
-                        _hasChapters ? Icons.list : Icons.text_snippet,
-                        color: Theme.of(context).primaryColor,
-                      ),
+                    // Animación para el switch de capítulos (aparece solo para libro o novela)
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: isBookOrNovel
+                          ? SwitchListTile(
+                              key: const ValueKey('chapterSwitch'),
+                              title: const Text("¿El libro tendrá capítulos?"),
+                              value: _hasChapters,
+                              onChanged: (bool value) {
+                                setState(() {
+                                  _hasChapters = value;
+                                });
+                              },
+                              secondary: Icon(
+                                _hasChapters ? Icons.list : Icons.text_snippet,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            )
+                          : const SizedBox(key: ValueKey('noChapterSwitch')),
                     ),
                     const SizedBox(height: 24),
                     CustomButton(

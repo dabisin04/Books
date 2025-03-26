@@ -219,7 +219,8 @@ class BookRepositoryImpl implements BookRepository {
       {String? title,
       String? description,
       List<String>? additionalGenres,
-      String? genre}) async {
+      String? genre,
+      String? contentType}) async {
     final db = await _database;
     final values = <String, dynamic>{};
 
@@ -229,6 +230,7 @@ class BookRepositoryImpl implements BookRepository {
       values['additional_genres'] = jsonEncode(additionalGenres);
     }
     if (genre != null) values['genre'] = genre;
+    if (contentType != null) values['content_type'] = contentType;
 
     if (values.isNotEmpty) {
       await db.update('books', values, where: 'id = ?', whereArgs: [bookId]);

@@ -16,9 +16,10 @@ abstract class BookRepository {
       String bookId, String? publicationDate);
   Future<void> updateBookDetails(String bookId,
       {String? title,
+      String? description,
       List<String>? additionalGenres,
       String? genre,
-      String? description});
+      String? contentType});
   Future<void> trashBook(String bookId);
   Future<void> restoreBook(String bookId);
 }

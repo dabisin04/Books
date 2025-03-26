@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -63,6 +63,8 @@ class DatabaseHelper {
         content TEXT,
         is_trashed INTEGER DEFAULT 0,
         has_chapters INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        content_type TEXT DEFAULT 'text' CHECK (content_type IN ('book', 'article', 'review', 'essay', 'research', 'blog', 'news', 'novel', 'short_story', 'tutorial', 'guide'));,
         FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
@@ -75,7 +77,7 @@ class DatabaseHelper {
         content TEXT,
         upload_date TEXT NOT NULL,
         publication_date TEXT,
-        chapter_number INTEGER,  -- Para guardar el orden, opcional
+        chapter_number INTEGER, 
         views INTEGER DEFAULT 0,
         rating REAL DEFAULT 0,
         ratings_count INTEGER DEFAULT 0,
@@ -139,6 +141,17 @@ class DatabaseHelper {
     )
     ''');
 
+    // Tabla de Seguimientos
+    await db.execute('''
+    CREATE TABLE follows (
+      id TEXT PRIMARY KEY,
+      follower_id TEXT NOT NULL,
+      followee_id TEXT NOT NULL,
+      FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE,
+      FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+    ''');
+
     // Tabla de Listas de Lectura
     await db.execute('''
     CREATE TABLE reading_lists (
@@ -188,6 +201,14 @@ class DatabaseHelper {
     if (oldVersion < 5) {
       await db.execute(
           'ALTER TABLE books ADD COLUMN has_chapters INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 6) {
+      await db.execute(
+          'ALTER TABLE books ADD COLUMN status TEXT DEFAULT "pending" CHECK (status IN ("pending", "approved", "rejected"))');
+      await db.execute(
+          'ALTER TABLE books ADD COLUMN content_type TEXT DEFAULT "book" CHECK (content_type IN ("book", "article", "review", "essay", "research", "blog", "news", "novel", "short_story", "tutorial", "guide"))');
+      await db.execute(
+          '''CREATE TABLE follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE)''');
     }
   }
 }

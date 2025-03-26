@@ -211,6 +211,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
         description: event.description,
         additionalGenres: event.additionalGenres,
         genre: event.genre,
+        contentType: event.contentType,
       );
 
       final updatedBooks = (state as BookLoaded).books.map((book) {
@@ -221,6 +222,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
                 additionalGenres:
                     event.additionalGenres ?? book.additionalGenres,
                 genre: event.genre ?? book.genre,
+                contentType: event.contentType ?? book.contentType,
               )
             : book;
       }).toList();

@@ -96,6 +96,7 @@ class UpdateBookDetails extends BookEvent {
   final String? description;
   final String? genre;
   final List<String>? additionalGenres;
+  final String? contentType; // Nuevo campo para indicar el tipo de contenido
 
   const UpdateBookDetails({
     required this.bookId,
@@ -103,11 +104,12 @@ class UpdateBookDetails extends BookEvent {
     this.description,
     this.genre,
     this.additionalGenres,
+    this.contentType,
   });
 
   @override
   List<Object?> get props =>
-      [bookId, title, description, genre, additionalGenres];
+      [bookId, title, description, genre, additionalGenres, contentType];
 }
 
 class TrashBook extends BookEvent {

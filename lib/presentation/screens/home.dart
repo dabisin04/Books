@@ -15,7 +15,6 @@ import 'package:books/presentation/widgets/home/bottom_nav_bar.dart';
 import 'package:books/presentation/screens/book/reading/book_details.dart';
 import 'package:books/presentation/widgets/home/lazy_horizontal_book_list.dart';
 import 'dart:async';
-
 import '../../application/bloc/user/user_event.dart';
 import 'user/profile.dart';
 
