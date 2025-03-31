@@ -621,6 +621,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  porter_2_stemmer:
+    dependency: transitive
+    description:
+      name: porter_2_stemmer
+      sha256: "40374d14165022a700797689eb159bd7baed701fc7c8ca9f39dd0945366b2ed3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.2"
   posix:
     dependency: transitive
     description:
@@ -850,6 +858,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  string_validator:
+    dependency: "direct main"
+    description:
+      name: string_validator
+      sha256: a278d038104aa2df15d0e09c47cb39a49f907260732067d0034dc2f2e4e2ac94
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   synchronized:
     dependency: transitive
     description:
@@ -874,6 +890,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.4"
+  text_analysis:
+    dependency: "direct main"
+    description:
+      name: text_analysis
+      sha256: "61c8e8d2b25e651f53f77b0c28a7c91b5058c2cf2ee5617e793490705f12cea0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0+2"
   turn_page_transition:
     dependency: "direct main"
     description:

@@ -27,6 +27,8 @@ dependencies:
   html: ^0.15.5
   flutter_launcher_icons: ^0.14.3
   turn_page_transition: ^0.4.0
+  string_validator: ^1.1.0
+  text_analysis: ^1.0.0+2
 
 flutter_icons:
   android: true

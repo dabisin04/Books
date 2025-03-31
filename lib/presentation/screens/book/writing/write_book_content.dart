@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:books/infrastructure/utils/content_validator.dart';
 import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 import 'package:books/presentation/widgets/book/publication_date.dart';
 import 'package:flutter/material.dart';
@@ -81,6 +82,90 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
 
     final deltaJson = _controller.document.toDelta().toJson();
     final contentMap = {'ops': deltaJson};
+
+    // Mostrar loader mientras se valida
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final validationResult = ContentValidator.validate(contentMap);
+
+    Navigator.of(context).pop(); // Cerrar el loader
+
+    if (!validationResult.isValid) {
+      await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            title: const Text(
+              "Problemas en el contenido",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Razones generales:",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ...validationResult.messages.map((msg) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(msg,
+                            style: const TextStyle(color: Colors.black87)),
+                      )),
+                  const SizedBox(height: 12),
+                  if (validationResult.problematicParagraphs.isNotEmpty)
+                    const Text(
+                      "Párrafos problemáticos:",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  const SizedBox(height: 8),
+                  ...validationResult.problematicParagraphs
+                      .map((issue) => Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              border: Border.all(color: Colors.redAccent),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  issue.paragraph,
+                                  style: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                ...issue.reasons.map((reason) => Text(
+                                      "- $reason",
+                                      style: const TextStyle(color: Colors.red),
+                                    )),
+                              ],
+                            ),
+                          )),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cerrar"),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
 
     print("Contenido guardado en DB: ${jsonEncode(contentMap)}");
 

@@ -82,15 +82,10 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-
-  // Género principal y adicionales según tipo de contenido
   String? _selectedMainGenre;
   List<String> _selectedAdditionalGenres = [];
   bool _hasChapters = false;
-
-  // Nuevo: Tipo de contenido, valor interno; por defecto "book"
   String _selectedContentType = "book";
-
   LinearGradient _currentGradient = _generateRandomGradient();
 
   static LinearGradient _generateRandomGradient() {
@@ -198,7 +193,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
   }
 
   Future<void> _selectAdditionalGenres() async {
-    // Si el contenido no es libro o novela, se omite esta opción.
     if (_selectedContentType != 'book' && _selectedContentType != 'novel') {
       setState(() {
         _selectedAdditionalGenres = [];
@@ -298,7 +292,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Si el contenido es libro o novela, usamos availableGenres, de lo contrario availableArticleGenres.
     final bool isBookOrNovel =
         _selectedContentType == 'book' || _selectedContentType == 'novel';
     final List<String> currentAvailableGenres =
@@ -375,7 +368,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
-                    // Dropdown para seleccionar el tipo de contenido con menos padding
                     DropdownButtonFormField<String>(
                       value: _selectedContentType,
                       decoration: const InputDecoration(
@@ -396,7 +388,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                           setState(() {
                             _selectedContentType = value;
                             _selectedMainGenre = null;
-                            // Si el contenido no es libro o novela, limpiamos los géneros adicionales
                             if (!isBookOrNovel) {
                               _selectedAdditionalGenres = [];
                             }
@@ -405,7 +396,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    // Dropdown para género principal, el label cambia a "Enfoque" si no es libro/novela
                     DropdownButtonFormField<String>(
                       value: _selectedMainGenre,
                       decoration: InputDecoration(
@@ -455,7 +445,6 @@ class _WriteBookScreenState extends State<WriteBookScreen> {
                         ),
                       ),
                     const SizedBox(height: 16),
-                    // Animación para el switch de capítulos (aparece solo para libro o novela)
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
                       child: isBookOrNovel

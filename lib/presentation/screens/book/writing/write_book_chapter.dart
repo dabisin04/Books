@@ -1,8 +1,9 @@
-// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api, unused_import, use_super_parameters, unused_field
+// ignore_for_file: use_build_context_synchronously, library_private_types_in_public_api, unused_import, use_super_parameters, unused_field, unused_local_variable
 
 import 'dart:async';
 import 'dart:convert';
 import 'package:books/domain/ports/book/chapter_repository.dart';
+import 'package:books/infrastructure/utils/content_validator.dart';
 import 'package:books/presentation/screens/loading.dart';
 import 'package:books/presentation/widgets/book/publication_date.dart';
 import 'package:flutter/material.dart';
@@ -99,16 +100,92 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
   }
 
   Future<void> _finishChapter() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return PublicationDateModal(book: widget.book);
-      },
-    );
+    if (widget.chapter?.publicationDate == null) {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext context) {
+          return PublicationDateModal(book: widget.book);
+        },
+      );
+    }
 
     final deltaJson = _controller.document.toDelta().toJson();
     final contentMap = {'ops': deltaJson};
+
+    final validationResult = ContentValidator.validate(contentMap);
+    if (!validationResult.isValid) {
+      await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            title: const Text(
+              "Problemas en el contenido",
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Razones generales:",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ...validationResult.messages.map((msg) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(msg,
+                            style: const TextStyle(color: Colors.black87)),
+                      )),
+                  const SizedBox(height: 12),
+                  if (validationResult.problematicParagraphs.isNotEmpty)
+                    const Text(
+                      "Párrafos problemáticos:",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  const SizedBox(height: 8),
+                  ...validationResult.problematicParagraphs
+                      .map((issue) => Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              border: Border.all(color: Colors.redAccent),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  issue.paragraph,
+                                  style: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                ...issue.reasons.map((reason) => Text(
+                                      "- $reason",
+                                      style: const TextStyle(color: Colors.red),
+                                    )),
+                              ],
+                            ),
+                          )),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cerrar"),
+              )
+            ],
+          );
+        },
+      );
+      return;
+    }
 
     if (widget.chapter != null) {
       final updatedChapter = widget.chapter!.copyWith(
