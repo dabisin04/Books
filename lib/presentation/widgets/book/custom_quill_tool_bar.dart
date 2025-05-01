@@ -5,8 +5,7 @@ class CustomQuillToolbar extends StatelessWidget
     implements PreferredSizeWidget {
   final quill.QuillController controller;
 
-  const CustomQuillToolbar({Key? key, required this.controller})
-      : super(key: key);
+  const CustomQuillToolbar({super.key, required this.controller});
 
   @override
   Size get preferredSize => const Size.fromHeight(80);

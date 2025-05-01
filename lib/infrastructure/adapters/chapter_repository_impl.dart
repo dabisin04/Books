@@ -51,8 +51,6 @@ class ChapterRepositoryImpl implements ChapterRepository {
     return maps.map((map) => Chapter.fromMap(map)).toList();
   }
 
-  // Implementaciones de los métodos nuevos:
-
   @override
   Future<void> updateChapterViews(String chapterId) async {
     final db = await _database;

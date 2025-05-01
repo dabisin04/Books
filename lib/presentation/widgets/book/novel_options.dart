@@ -5,7 +5,7 @@ import 'package:books/presentation/screens/book/writing/write_book_chapter.dart'
 
 class NovelOptionsModal extends StatelessWidget {
   final Book book;
-  const NovelOptionsModal({Key? key, required this.book}) : super(key: key);
+  const NovelOptionsModal({super.key, required this.book});
 
   @override
   Widget build(BuildContext context) {

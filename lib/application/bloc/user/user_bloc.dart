@@ -116,7 +116,6 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     emit(UserLoading());
     try {
       await userRepository.changePassword(event.userId, event.newPassword);
-      // Tras actualizar, se recupera la información actualizada del usuario
       final updatedUser = await userRepository.getUserById(event.userId);
       if (updatedUser != null) {
         emit(UserPasswordChanged(user: updatedUser));

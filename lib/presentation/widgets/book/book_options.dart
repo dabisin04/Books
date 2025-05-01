@@ -6,7 +6,7 @@ import 'package:books/presentation/screens/book/writing/write_book.dart';
 
 class BookOptions extends StatelessWidget {
   final Book book;
-  const BookOptions({Key? key, required this.book}) : super(key: key);
+  const BookOptions({super.key, required this.book});
 
   @override
   Widget build(BuildContext context) {
