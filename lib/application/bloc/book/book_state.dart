@@ -21,6 +21,15 @@ class BookLoaded extends BookState {
   List<Object?> get props => [books];
 }
 
+class BookFoundById extends BookState {
+  final Book book;
+
+  const BookFoundById(this.book);
+
+  @override
+  List<Object?> get props => [book];
+}
+
 class BookError extends BookState {
   final String message;
 

@@ -1,11 +1,15 @@
-// ignore_for_file: unused_import
+// ignore_for_file: unused_import, depend_on_referenced_packages
 
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
+import 'package:books/application/bloc/rating/rating_bloc.dart';
 import 'package:books/application/bloc/user/user_event.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/domain/ports/book/chapter_repository.dart';
-import 'package:books/infrastructure/adapters/chapter_repository_impl.dart';
+import 'package:books/domain/ports/interaction/rating_repository.dart';
+import 'package:books/infrastructure/adapters/book/chapter_repository_impl.dart';
+import 'package:books/infrastructure/adapters/interaction/rating_repository_impl.dart';
 import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
+import 'package:books/presentation/screens/library/favorite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -19,9 +23,9 @@ import 'package:books/domain/theme/app_theme.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/comment/comment_bloc.dart';
-import 'package:books/infrastructure/adapters/book_repository_impl.dart';
-import 'package:books/infrastructure/adapters/user_repository_impl.dart';
-import 'package:books/infrastructure/adapters/comment_repository_impl.dart';
+import 'package:books/infrastructure/adapters/book/book_repository_impl.dart';
+import 'package:books/infrastructure/adapters/user/user_repository_impl.dart';
+import 'package:books/infrastructure/adapters/interaction/comment_repository_impl.dart';
 import 'package:books/infrastructure/utils/shared_prefs_helper.dart';
 import 'package:books/presentation/screens/splash_screen.dart';
 import 'package:books/presentation/screens/auth/login.dart';
@@ -33,9 +37,11 @@ import 'package:books/presentation/screens/book/writing/write_book.dart';
 import 'package:books/presentation/screens/book/writing/write_book_content.dart';
 import 'package:books/presentation/screens/book/reading/read_contet.dart';
 import 'package:books/presentation/screens/book/trashing/thrash_bin.dart';
-// Rutas nuevas:
 import 'package:books/presentation/screens/user/edit_profile.dart';
 import 'package:books/presentation/screens/user/change_password.dart';
+import 'package:books/domain/ports/library/favorite_repository.dart';
+import 'package:books/infrastructure/adapters/library/favorite_repository_impl.dart';
+import 'package:books/application/bloc/favorite/favorite_bloc.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -50,12 +56,16 @@ Future<void> main() async {
   final bookRepository = BookRepositoryImpl(SharedPrefsService());
   final commentRepository = CommentRepositoryImpl(SharedPrefsService());
   final chapterRepository = ChapterRepositoryImpl();
+  final ratingRepository = BookRatingRepositoryImpl();
+  final favoriteRepository = FavoriteRepositoryImpl();
 
   runApp(MyApp(
     userRepository: userRepository,
     bookRepository: bookRepository,
     commentRepository: commentRepository,
     chapterRepository: chapterRepository,
+    ratingRepository: ratingRepository,
+    favoriteRepository: favoriteRepository,
   ));
 }
 
@@ -64,6 +74,8 @@ class MyApp extends StatelessWidget {
   final BookRepositoryImpl bookRepository;
   final CommentRepository commentRepository;
   final ChapterRepositoryImpl chapterRepository;
+  final BookRatingRepositoryImpl ratingRepository;
+  final FavoriteRepositoryImpl favoriteRepository;
 
   const MyApp({
     super.key,
@@ -71,6 +83,8 @@ class MyApp extends StatelessWidget {
     required this.bookRepository,
     required this.commentRepository,
     required this.chapterRepository,
+    required this.ratingRepository,
+    required this.favoriteRepository,
   });
 
   @override
@@ -88,7 +102,13 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<ChapterRepository>(
           create: (_) => chapterRepository,
-        )
+        ),
+        RepositoryProvider<BookRatingRepository>(
+          create: (_) => ratingRepository,
+        ),
+        RepositoryProvider<FavoriteRepository>(
+          create: (_) => favoriteRepository,
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -103,7 +123,14 @@ class MyApp extends StatelessWidget {
             create: (_) => CommentBloc(commentRepository),
           ),
           BlocProvider<ChapterBloc>(
-              create: (_) => ChapterBloc(chapterRepository: chapterRepository))
+            create: (_) => ChapterBloc(chapterRepository: chapterRepository),
+          ),
+          BlocProvider<RatingBloc>(
+            create: (_) => RatingBloc(ratingRepository: ratingRepository),
+          ),
+          BlocProvider<FavoriteBloc>(
+            create: (_) => FavoriteBloc(favoriteRepository),
+          ),
         ],
         child: MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
@@ -130,6 +157,7 @@ class MyApp extends StatelessWidget {
               final book = ModalRoute.of(context)!.settings.arguments as Book;
               return BookDetailsScreen(book: book);
             },
+            '/favorites': (context) => const FavoriteBooksScreen(),
             '/profile': (context) => const ProfileScreen(),
             '/edit_profile': (context) => const EditProfileScreen(),
             '/change_password': (context) => const ChangePasswordScreen(),

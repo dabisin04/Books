@@ -40,27 +40,30 @@ class _PaginatedBookViewerState extends State<PaginatedBookViewer> {
       if (data is String) {
         final parts = data.split('\n');
         for (int i = 0; i < parts.length; i++) {
-          if (parts[i].isNotEmpty) {
-            currentLine.add(_buildInlineSpan(parts[i], op.attributes));
-          }
+          final part = parts[i];
+          // Si la línea está vacía, insertamos un carácter invisible para forzar el render
+          final displayText = part.isEmpty ? '\u200B' : part;
+          currentLine.add(_buildInlineSpan(displayText, op.attributes));
+
+          // Si no es la última parte, o termina en salto de línea, se agrega como línea completa
           if (i < parts.length - 1 || data.endsWith('\n')) {
-            if (currentLine.isNotEmpty) {
-              _linesWithAttributes.add({
-                "spans": List<TextSpan>.from(currentLine),
-                "blockAttributes": op.attributes,
-              });
-              currentLine = [];
-            }
+            _linesWithAttributes.add({
+              "spans": List<TextSpan>.from(currentLine),
+              "blockAttributes": op.attributes,
+            });
+            currentLine = [];
           }
         }
       }
     }
+
     if (currentLine.isNotEmpty) {
       _linesWithAttributes.add({
         "spans": List<TextSpan>.from(currentLine),
         "blockAttributes": null,
       });
     }
+
     debugPrint("Total líneas generadas: ${_linesWithAttributes.length}");
   }
 

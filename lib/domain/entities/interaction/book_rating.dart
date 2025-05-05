@@ -5,7 +5,8 @@ class BookRating extends Equatable {
   final String id;
   final String userId;
   final String bookId;
-  final int rating;
+  final double rating;
+  final String timestamp;
 
   static const Uuid _uuid = Uuid();
 
@@ -14,8 +15,10 @@ class BookRating extends Equatable {
     required this.userId,
     required this.bookId,
     required this.rating,
+    String? timestamp,
   })  : assert(rating >= 1 && rating <= 5, 'El rating debe estar entre 1 y 5'),
-        id = id ?? _uuid.v4();
+        id = id ?? _uuid.v4(),
+        timestamp = timestamp ?? DateTime.now().toIso8601String();
 
   Map<String, dynamic> toMap() {
     return {
@@ -23,6 +26,7 @@ class BookRating extends Equatable {
       'user_id': userId,
       'book_id': bookId,
       'rating': rating,
+      'timestamp': timestamp,
     };
   }
 
@@ -32,9 +36,10 @@ class BookRating extends Equatable {
       userId: map['user_id'],
       bookId: map['book_id'],
       rating: map['rating'],
+      timestamp: map['timestamp'],
     );
   }
 
   @override
-  List<Object?> get props => [id, userId, bookId, rating];
+  List<Object?> get props => [id, userId, bookId, rating, timestamp];
 }

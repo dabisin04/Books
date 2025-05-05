@@ -1,8 +1,12 @@
 // ignore_for_file: library_private_types_in_public_api, no_leading_underscores_for_local_identifiers
 import 'dart:math';
+import 'package:books/application/bloc/favorite/favorite_bloc.dart';
+import 'package:books/application/bloc/favorite/favorite_event.dart';
+import 'package:books/application/bloc/favorite/favorite_state.dart';
 import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 import 'package:books/presentation/widgets/book/book_options.dart';
 import 'package:books/presentation/widgets/book/novel_options.dart';
+import 'package:books/presentation/widgets/book/rating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/application/bloc/comment/comment_bloc.dart';
@@ -38,6 +42,11 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
     if (widget.book.has_chapters) {
       context.read<ChapterBloc>().add(LoadChaptersByBook(widget.book.id));
+    }
+
+    final userState = context.read<UserBloc>().state;
+    if (userState is UserAuthenticated) {
+      context.read<FavoriteBloc>().add(LoadFavoritesEvent(userState.user.id));
     }
   }
 
@@ -166,9 +175,31 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.more_vert),
-                onPressed: () {},
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'report') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text("Funcionalidad de reporte próximamente")),
+                    );
+                  } else if (value == 'favorite') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text("Añadido a favoritos (simulado)")),
+                    );
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: 'report',
+                    child: Text('Reportar'),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'favorite',
+                    child: Text('Añadir a favoritos'),
+                  ),
+                ],
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -203,8 +234,17 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                         if (!widget.book.has_chapters) ...[
                           Row(
                             children: [
-                              const Icon(Icons.star,
-                                  color: Colors.yellow, size: 20),
+                              GestureDetector(
+                                child: const Icon(Icons.star,
+                                    color: Colors.yellow, size: 20),
+                                onTap: () => showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.transparent,
+                                  isScrollControlled: true,
+                                  builder: (_) =>
+                                      RatingModal(bookId: widget.book.id),
+                                ),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 widget.book.rating.toStringAsFixed(1),
@@ -219,6 +259,42 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                 widget.book.views.toString(),
                                 style: const TextStyle(
                                     fontSize: 16, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
+                              BlocConsumer<FavoriteBloc, FavoriteState>(
+                                listener: (context, favState) {},
+                                builder: (context, favState) {
+                                  final userState =
+                                      context.read<UserBloc>().state;
+                                  if (userState is! UserAuthenticated)
+                                    return const SizedBox();
+                                  final userId = userState.user.id;
+
+                                  final isFav = favState is FavoriteLoaded &&
+                                      favState.favoriteBookIds
+                                          .contains(widget.book.id);
+
+                                  return IconButton(
+                                    icon: Icon(
+                                      isFav
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    onPressed: () {
+                                      final favBloc =
+                                          context.read<FavoriteBloc>();
+                                      if (isFav) {
+                                        favBloc.add(RemoveFavoriteEvent(
+                                            userId, widget.book.id));
+                                      } else {
+                                        favBloc.add(AddFavoriteEvent(
+                                            userId, widget.book.id));
+                                      }
+                                    },
+                                  );
+                                },
                               ),
                             ],
                           )

@@ -10,6 +10,15 @@ abstract class BookEvent extends Equatable {
 
 class LoadBooks extends BookEvent {}
 
+class GetBookByIdEvent extends BookEvent {
+  final String bookId;
+
+  const GetBookByIdEvent(this.bookId);
+
+  @override
+  List<Object?> get props => [bookId];
+}
+
 class AddBook extends BookEvent {
   final Book book;
 

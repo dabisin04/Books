@@ -5,6 +5,7 @@ abstract class BookRepository {
   Future<void> deleteBook(String bookId);
   Future<List<Book>> fetchBooks(
       {String? filter, String? sortBy, bool trashed = false});
+  Future<Book?> getBookById(String bookId);
   Future<void> updateBookViews(String bookId);
   Future<void> rateBook(String bookId, String userId, double rating);
   Future<List<Book>> searchBooks(String query);

@@ -12,7 +12,7 @@ import 'package:books/domain/entities/book/book.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/book/book_event.dart';
 import 'package:books/application/bloc/book/book_state.dart';
-import 'package:books/services/gemini_service.dart';
+import 'package:books/services/deepseek_service.dart';
 import 'package:books/presentation/screens/loading.dart';
 import 'package:books/presentation/widgets/book/publication_date_selector.dart';
 import 'package:flutter_quill/quill_delta.dart' as quill;
@@ -204,6 +204,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     setState(() {
       _isFetchingSuggestion = true;
     });
+
     _previousDelta = _controller.document.toDelta();
     final currentText = _controller.document.toPlainText().trim();
 
@@ -227,7 +228,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
               final doc = quill.Document.fromJson(previousBook.content!['ops']);
               previousBookContent = doc.toPlainText();
             } catch (e) {
-              // Si falla la conversión, se deja como null.
+              print('[Editor] ❗ Error al leer libro previo: $e');
             }
           }
         }
@@ -235,7 +236,7 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
     }
 
     try {
-      final suggestionDelta = await GeminiService.getBookSuggestion(
+      final suggestionDelta = await DeepSeekService.getBookSuggestion(
         title: widget.book.title,
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
@@ -243,35 +244,54 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         userPrompt: userPrompt,
         currentContent: currentText,
         previousBook: previousBookContent,
+        contentType: widget.book.contentType, // ✅ esta línea es la nueva
       );
+
+      print('[Editor] ✅ Delta sugerido generado:');
+      final deltaJson = suggestionDelta.toJson();
+      for (final op in deltaJson) {
+        print(op);
+      }
 
       final currentLength = _controller.document.length;
       _suggestionStart = currentLength;
+
       if (currentLength <= 1) {
+        print(
+            '[Editor] 🧪 Insertando delta directamente en documento vacío...');
         _controller.document.compose(suggestionDelta, quill.ChangeSource.local);
       } else {
+        print('[Editor] 🧪 Insertando delta con retención...');
         final retainDelta = quill.Delta()..retain(currentLength - 1);
         final fullDelta = retainDelta.concat(suggestionDelta);
         _controller.document.compose(fullDelta, quill.ChangeSource.local);
       }
+
       _suggestionEnd = _controller.document.length;
       _controller.updateSelection(
         TextSelection(
             baseOffset: _suggestionStart, extentOffset: _suggestionEnd),
         quill.ChangeSource.local,
       );
+
+      print(
+          '[Editor] 📌 Sugerencia insertada entre $_suggestionStart y $_suggestionEnd');
+
       setState(() {
         _showDiscardBanner = true;
       });
+
       _discardBannerTimer?.cancel();
       _discardBannerTimer = Timer(const Duration(seconds: 5), () {
         _clearSelectionAndHideBanner();
       });
     } catch (e) {
+      print('[Editor] ❌ Error obteniendo sugerencia: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error obteniendo sugerencia: $e")),
       );
     }
+
     setState(() {
       _isFetchingSuggestion = false;
     });

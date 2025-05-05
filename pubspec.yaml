@@ -29,6 +29,8 @@ dependencies:
   turn_page_transition: ^0.4.0
   string_validator: ^1.1.0
   text_analysis: ^1.0.0+2
+  flutter_rating_bar: ^4.0.1
+  connectivity_plus: ^6.1.4
 
 flutter_icons:
   android: true

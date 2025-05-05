@@ -1,8 +1,18 @@
-import '../../entities/interaction/book_rating.dart';
-
-abstract class RatingRepository {
-  Future<void> addRating(BookRating rating);
-  Future<void> updateRating(String bookId, String userId, int newRating);
-  Future<double> getAverageRating(String bookId);
-  Future<List<BookRating>> getRatingsByBook(String bookId);
+abstract class BookRatingRepository {
+  Future<void> upsertRating({
+    required String userId,
+    required String bookId,
+    required double rating,
+    DateTime? timestamp,
+  });
+  Future<double?> fetchUserRating({
+    required String userId,
+    required String bookId,
+  });
+  Future<({double average, int count})> fetchGlobalAverage(String bookId);
+  Future<Map<int, int>> fetchDistribution(String bookId);
+  Future<void> deleteRating({
+    required String userId,
+    required String bookId,
+  });
 }

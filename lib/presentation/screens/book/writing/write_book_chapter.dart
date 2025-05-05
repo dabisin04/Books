@@ -14,7 +14,7 @@ import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
-import 'package:books/services/gemini_service.dart';
+import 'package:books/services/deepseek_service.dart';
 import 'package:books/presentation/widgets/book/custom_quill_tool_bar.dart';
 
 class WriteChapterScreen extends StatefulWidget {
@@ -255,7 +255,7 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
     }
 
     try {
-      final suggestionDelta = await GeminiService.getBookSuggestion(
+      final suggestionDelta = await DeepSeekService.getBookSuggestion(
         title: "${widget.book.title} - $chapterTitleOrNumber",
         primaryGenre: widget.book.genre,
         additionalGenres: widget.book.additionalGenres,
@@ -264,6 +264,7 @@ class _WriteChapterScreenState extends State<WriteChapterScreen> {
         currentContent: currentText,
         previousChapter: previousChapterContent,
         previousBook: null,
+        contentType: widget.book.contentType,
       );
 
       final currentLength = _controller.document.length;

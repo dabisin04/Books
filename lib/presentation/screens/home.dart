@@ -1,5 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api
 
+import 'package:books/presentation/screens/library/favorite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:books/domain/entities/book/book.dart';
@@ -237,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> pages = [
       _buildHomeContent(),
       const Center(child: Text('Search Screen')),
-      const Center(child: Text('Favorites Screen')),
+      const FavoriteBooksScreen(),
       const Center(child: Text('Notifications Screen')),
       const ProfileScreen(),
     ];
@@ -251,10 +252,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
         drawer: const HamburguerMenu(),
         appBar: PreferredSize(
-          preferredSize: Size.fromHeight(_currentIndex == 4 ? 0 : 82),
+          preferredSize: Size.fromHeight(
+              (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == 4)
+                  ? 0
+                  : 82),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            height: _currentIndex == 4 ? 0 : 82,
+            height:
+                (_currentIndex == 2 || _currentIndex == 3 || _currentIndex == 4)
+                    ? 0
+                    : 82,
             child: AppBar(
               backgroundColor: Colors.redAccent,
               title: Row(

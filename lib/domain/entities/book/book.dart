@@ -118,15 +118,40 @@ class Book extends Equatable {
 
   /// Crea un objeto `Book` a partir de un `Map<String, dynamic>`.
   factory Book.fromMap(Map<String, dynamic> map) {
+    List<String> parseAdditionalGenres(dynamic input) {
+      if (input is List) return List<String>.from(input);
+      if (input is String) {
+        try {
+          final decoded = jsonDecode(input);
+          return decoded is List ? List<String>.from(decoded) : [];
+        } catch (e) {
+          print('⚠️ Error decoding additional_genres: $e');
+          return [];
+        }
+      }
+      return [];
+    }
+
+    Map<String, dynamic>? parseContent(dynamic input) {
+      if (input is Map) return input as Map<String, dynamic>;
+      if (input is String) {
+        try {
+          return jsonDecode(input) as Map<String, dynamic>;
+        } catch (e) {
+          print('⚠️ Error decoding content: $e');
+          return null;
+        }
+      }
+      return null;
+    }
+
     return Book(
       id: map['id'] ?? _uuid.v4(),
       title: map['title'] ?? 'Sin título',
       authorId: map['author_id'] ?? 'Desconocido',
       description: map['description'],
       genre: map['genre'] ?? 'Sin género',
-      additionalGenres: map['additional_genres'] != null
-          ? List<String>.from(jsonDecode(map['additional_genres']))
-          : [],
+      additionalGenres: parseAdditionalGenres(map['additional_genres']),
       uploadDate: map['upload_date'] ?? DateTime.now().toIso8601String(),
       publicationDate: map['publication_date'] != null
           ? DateTime.tryParse(map['publication_date'])
@@ -135,11 +160,9 @@ class Book extends Equatable {
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
       ratingsCount: map['ratings_count'] ?? 0,
       reports: map['reports'] ?? 0,
-      content: map['content'] != null
-          ? jsonDecode(map['content']) as Map<String, dynamic>
-          : null,
-      isTrashed: map['is_trashed'] == 1,
-      has_chapters: map['has_chapters'] == 1,
+      content: parseContent(map['content']),
+      isTrashed: map['is_trashed'] == 1 || map['is_trashed'] == true,
+      has_chapters: map['has_chapters'] == 1 || map['has_chapters'] == true,
       status: map['status'] ?? 'pending',
       contentType: map['content_type'] ?? 'book',
     );

@@ -12,6 +12,7 @@ class BookBloc extends Bloc<BookEvent, BookState> {
 
   BookBloc(this.bookRepository, this.userRepository) : super(BookInitial()) {
     on<LoadBooks>(_onLoadBooks);
+    on<GetBookByIdEvent>(_onGetBookById);
     on<AddBook>(_onAddBook);
     on<DeleteBook>(_onDeleteBook);
     on<UpdateBookViews>(_onUpdateBookViews);
@@ -36,6 +37,23 @@ class BookBloc extends Bloc<BookEvent, BookState> {
     } catch (e, stackTrace) {
       debugPrint('Error en _onLoadBooks: $e\n$stackTrace');
       emit(const BookError("Error al cargar libros"));
+    }
+  }
+
+  Future<void> _onGetBookById(
+    GetBookByIdEvent event,
+    Emitter<BookState> emit,
+  ) async {
+    emit(BookLoading());
+    try {
+      final book = await bookRepository.getBookById(event.bookId);
+      if (book != null) {
+        emit(BookFoundById(book));
+      } else {
+        emit(const BookError('Libro no encontrado.'));
+      }
+    } catch (e) {
+      emit(BookError("Error al obtener el libro: $e"));
     }
   }
 

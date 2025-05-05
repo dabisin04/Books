@@ -25,7 +25,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -39,9 +39,10 @@ class DatabaseHelper {
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        salt TEXT NOT NULL,  
+        salt TEXT NOT NULL,
         bio TEXT,
-        is_admin INTEGER DEFAULT 0
+        is_admin INTEGER DEFAULT 0,
+        sync INTEGER DEFAULT 0
       )
     ''');
 
@@ -64,7 +65,7 @@ class DatabaseHelper {
         is_trashed INTEGER DEFAULT 0,
         has_chapters INTEGER DEFAULT 0,
         status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-        content_type TEXT DEFAULT 'text' CHECK (content_type IN ('book', 'article', 'review', 'essay', 'research', 'blog', 'news', 'novel', 'short_story', 'tutorial', 'guide'));,
+        content_type TEXT DEFAULT 'text' CHECK (content_type IN ('book', 'article', 'review', 'essay', 'research', 'blog', 'news', 'novel', 'short_story', 'tutorial', 'guide')),
         FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE CASCADE
       )
     ''');
@@ -88,102 +89,103 @@ class DatabaseHelper {
 
     // Tabla de Calificaciones de Libros
     await db.execute('''
-    CREATE TABLE book_ratings (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      book_id TEXT NOT NULL,
-      rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
-      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-      FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
-    )
+      CREATE TABLE book_ratings (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        rating REAL NOT NULL CHECK (rating BETWEEN 0.5 AND 5),
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+      )
     ''');
 
     // Tabla de Comentarios
     await db.execute('''
-    CREATE TABLE comments (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      book_id TEXT NOT NULL,
-      content TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      parent_comment_id TEXT NULL,
-      root_comment_id TEXT NULL,
-      reports INTEGER DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-      FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
-      FOREIGN KEY (parent_comment_id) REFERENCES comments (id) ON DELETE CASCADE
-    )
+      CREATE TABLE comments (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        parent_comment_id TEXT NULL,
+        root_comment_id TEXT NULL,
+        reports INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_comment_id) REFERENCES comments (id) ON DELETE CASCADE
+      )
     ''');
 
     // Tabla de Reportes
     await db.execute('''
-    CREATE TABLE reports (
-      id TEXT PRIMARY KEY,
-      reporter_id TEXT NOT NULL,
-      target_id TEXT NOT NULL,
-      target_type TEXT CHECK (target_type IN ('book', 'comment')) NOT NULL,
-      reason TEXT NOT NULL,
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'dismissed')),
-      admin_id TEXT NULL,
-      FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
-      FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE SET NULL
-    )
+      CREATE TABLE reports (
+        id TEXT PRIMARY KEY,
+        reporter_id TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        target_type TEXT CHECK (target_type IN ('book', 'comment')) NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'dismissed')),
+        admin_id TEXT NULL,
+        FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE SET NULL
+      )
     ''');
 
     // Tabla de Favoritos
     await db.execute('''
-    CREATE TABLE favorites (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      book_id TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-      FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
-    )
+      CREATE TABLE favorites (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+      )
     ''');
 
     // Tabla de Seguimientos
     await db.execute('''
-    CREATE TABLE follows (
-      id TEXT PRIMARY KEY,
-      follower_id TEXT NOT NULL,
-      followee_id TEXT NOT NULL,
-      FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE,
-      FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE
-    )
+      CREATE TABLE follows (
+        id TEXT PRIMARY KEY,
+        follower_id TEXT NOT NULL,
+        followee_id TEXT NOT NULL,
+        FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE
+      )
     ''');
 
     // Tabla de Listas de Lectura
     await db.execute('''
-    CREATE TABLE reading_lists (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-    )
+      CREATE TABLE reading_lists (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
     ''');
 
     // Relación entre Listas de Lectura y Libros
     await db.execute('''
-    CREATE TABLE reading_list_books (
-      id TEXT PRIMARY KEY,
-      list_id TEXT NOT NULL,
-      book_id TEXT NOT NULL,
-      FOREIGN KEY (list_id) REFERENCES reading_lists (id) ON DELETE CASCADE,
-      FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
-    )
+      CREATE TABLE reading_list_books (
+        id TEXT PRIMARY KEY,
+        list_id TEXT NOT NULL,
+        book_id TEXT NOT NULL,
+        FOREIGN KEY (list_id) REFERENCES reading_lists (id) ON DELETE CASCADE,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+      )
     ''');
 
     // Tabla de Notificaciones
     await db.execute('''
-    CREATE TABLE notifications (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('new_comment', 'new_rating', 'report_decision')),
-      message TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      is_read INTEGER DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-    )
+      CREATE TABLE notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('new_comment', 'new_rating', 'report_decision')),
+        message TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
     ''');
   }
 
@@ -209,6 +211,13 @@ class DatabaseHelper {
           'ALTER TABLE books ADD COLUMN content_type TEXT DEFAULT "book" CHECK (content_type IN ("book", "article", "review", "essay", "research", "blog", "news", "novel", "short_story", "tutorial", "guide"))');
       await db.execute(
           '''CREATE TABLE follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE)''');
+    }
+    if (oldVersion < 7) {
+      await db.execute('''
+        ALTER TABLE books_ratings
+        rating REAL NOT NULL CHECK (rating BETWEEN 0.5 AND 5),
+        ADD COLUMN timestamp TEXT NOT NULL,
+      ''');
     }
   }
 }

@@ -23,8 +23,7 @@ class Comment extends Equatable {
     String? rootCommentId,
     this.reports = 0,
   })  : id = id ?? _uuid.v4(),
-        rootCommentId = rootCommentId ??
-            (parentCommentId == null ? id ?? _uuid.v4() : null);
+        rootCommentId = rootCommentId ?? parentCommentId ?? id ?? _uuid.v4();
 
   Comment copyWith({
     String? id,
