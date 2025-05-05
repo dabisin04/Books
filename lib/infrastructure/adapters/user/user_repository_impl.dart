@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/entities/user/user.dart';
@@ -13,7 +14,10 @@ class UserRepositoryImpl implements UserRepository {
   final SharedPrefsService sharedPrefs;
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final Connectivity _connectivity = Connectivity();
-  static const String apiUrl = 'http://172.50.4.230:5000/api';
+  static String apiUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static final Duration apiTimeout = Duration(
+    seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
+  );
 
   UserRepositoryImpl(this.sharedPrefs);
 
@@ -34,17 +38,19 @@ class UserRepositoryImpl implements UserRepository {
     for (var userMap in unsyncedUsers) {
       final user = User.fromMap(userMap);
       try {
-        final response = await http.post(
-          Uri.parse('$apiUrl/register'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'username': user.username,
-            'email': user.email,
-            'password': user.password, // Note: API should handle hashing
-            'bio': user.bio,
-            'is_admin': user.isAdmin,
-          }),
-        );
+        final response = await http
+            .post(
+              Uri.parse('$apiUrl/register'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'username': user.username,
+                'email': user.email,
+                'password': user.password, // Note: API should handle hashing
+                'bio': user.bio,
+                'is_admin': user.isAdmin,
+              }),
+            )
+            .timeout(apiTimeout);
 
         if (response.statusCode == 201) {
           await db.update(
@@ -61,7 +67,8 @@ class UserRepositoryImpl implements UserRepository {
 
     // Sync server users to local (assuming a /users endpoint exists)
     try {
-      final response = await http.get(Uri.parse('$apiUrl/users'));
+      final response =
+          await http.get(Uri.parse('$apiUrl/users')).timeout(apiTimeout);
       if (response.statusCode == 200) {
         final List<dynamic> serverUsers = jsonDecode(response.body);
         for (var serverUser in serverUsers) {
@@ -131,11 +138,13 @@ class UserRepositoryImpl implements UserRepository {
       final userId = followerMap['user_id'] as String;
       final authorId = followerMap['author_id'] as String;
       try {
-        final response = await http.post(
-          Uri.parse('$apiUrl/followAuthor'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, 'author_id': authorId}),
-        );
+        final response = await http
+            .post(
+              Uri.parse('$apiUrl/followAuthor'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'user_id': userId, 'author_id': authorId}),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           await db.update(
             'followers',
@@ -155,9 +164,11 @@ class UserRepositoryImpl implements UserRepository {
         .toSet();
     for (var userId in userIds) {
       try {
-        final response = await http.get(
-          Uri.parse('$apiUrl/followedAuthors/$userId'),
-        );
+        final response = await http
+            .get(
+              Uri.parse('$apiUrl/followedAuthors/$userId'),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final serverAuthorIds = List<String>.from(jsonDecode(response.body));
           final localAuthorIds = (await db.query(
@@ -226,17 +237,19 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$apiUrl/register'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'username': user.username,
-            'email': user.email,
-            'password': user.password,
-            'bio': user.bio,
-            'is_admin': user.isAdmin,
-          }),
-        );
+        final response = await http
+            .post(
+              Uri.parse('$apiUrl/register'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'username': user.username,
+                'email': user.email,
+                'password': user.password,
+                'bio': user.bio,
+                'is_admin': user.isAdmin,
+              }),
+            )
+            .timeout(apiTimeout);
 
         if (response.statusCode == 201) {
           await db.update(
@@ -259,11 +272,13 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$apiUrl/login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'email': email, 'password': password}),
-        );
+        final response = await http
+            .post(
+              Uri.parse('$apiUrl/login'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'email': email, 'password': password}),
+            )
+            .timeout(apiTimeout);
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -318,16 +333,18 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$apiUrl/updateUser/${user.id}'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'username': user.username,
-            'email': user.email,
-            'bio': user.bio,
-            'is_admin': user.isAdmin,
-          }),
-        );
+        final response = await http
+            .put(
+              Uri.parse('$apiUrl/updateUser/${user.id}'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'username': user.username,
+                'email': user.email,
+                'bio': user.bio,
+                'is_admin': user.isAdmin,
+              }),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           await db.update(
             'users',
@@ -357,11 +374,13 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$apiUrl/changePassword/$userId'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'new_password': newPassword}),
-        );
+        final response = await http
+            .put(
+              Uri.parse('$apiUrl/changePassword/$userId'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'new_password': newPassword}),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           await db.update(
             'users',
@@ -381,7 +400,9 @@ class UserRepositoryImpl implements UserRepository {
   Future<User?> getUserById(String userId) async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(Uri.parse('$apiUrl/user/$userId'));
+        final response = await http
+            .get(Uri.parse('$apiUrl/user/$userId'))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final user =
               User.fromMap(jsonDecode(response.body)).copyWith(sync: true);
@@ -425,11 +446,13 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$apiUrl/updateBio/$userId'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'bio': bio}),
-        );
+        final response = await http
+            .put(
+              Uri.parse('$apiUrl/updateBio/$userId'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'bio': bio}),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           await db.update(
             'users',
@@ -452,8 +475,9 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response =
-            await http.delete(Uri.parse('$apiUrl/deleteUser/$userId'));
+        final response = await http
+            .delete(Uri.parse('$apiUrl/deleteUser/$userId'))
+            .timeout(apiTimeout);
         if (response.statusCode != 200) {
           throw Exception('Failed to delete user from API');
         }
@@ -479,9 +503,11 @@ class UserRepositoryImpl implements UserRepository {
   Future<List<User>> searchUsers(String query) async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(
-          Uri.parse('$apiUrl/searchUsers?query=$query'),
-        );
+        final response = await http
+            .get(
+              Uri.parse('$apiUrl/searchUsers?query=$query'),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final users = data
@@ -531,11 +557,13 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$apiUrl/followAuthor'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, 'author_id': authorId}),
-        );
+        final response = await http
+            .post(
+              Uri.parse('$apiUrl/followAuthor'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'user_id': userId, 'author_id': authorId}),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           await db.update(
             'followers',
@@ -562,11 +590,13 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.delete(
-          Uri.parse('$apiUrl/unfollowAuthor'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, 'author_id': authorId}),
-        );
+        final response = await http
+            .delete(
+              Uri.parse('$apiUrl/unfollowAuthor'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'user_id': userId, 'author_id': authorId}),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           // No sync field to update since record is deleted
         }
@@ -581,9 +611,11 @@ class UserRepositoryImpl implements UserRepository {
   Future<List<String>> getFollowedAuthors(String userId) async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(
-          Uri.parse('$apiUrl/followedAuthors/$userId'),
-        );
+        final response = await http
+            .get(
+              Uri.parse('$apiUrl/followedAuthors/$userId'),
+            )
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> authorIds = jsonDecode(response.body);
           // Update local SQLite

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -14,7 +15,10 @@ class BookRepositoryImpl implements BookRepository {
   Future<Database> get _database async =>
       await DatabaseHelper.instance.database;
   static const String cacheKey = 'cached_books';
-  static const String baseUrl = 'http://172.50.4.230:5000/api';
+  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static final Duration apiTimeout = Duration(
+    seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
+  );
 
   BookRepositoryImpl(this.sharedPrefs);
 

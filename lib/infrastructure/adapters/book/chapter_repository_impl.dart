@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 import '../../../domain/entities/book/chapter.dart';
@@ -10,7 +11,10 @@ class ChapterRepositoryImpl implements ChapterRepository {
   final Connectivity _connectivity = Connectivity();
   Future<Database> get _database async =>
       await DatabaseHelper.instance.database;
-  static const String baseUrl = 'http://172.50.4.230:5000/api';
+  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static final Duration apiTimeout = Duration(
+    seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
+  );
 
   Future<bool> _isOnline() async {
     final connectivityResult = await _connectivity.checkConnectivity();
