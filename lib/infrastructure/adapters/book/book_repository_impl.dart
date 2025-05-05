@@ -16,11 +16,19 @@ class BookRepositoryImpl implements BookRepository {
       await DatabaseHelper.instance.database;
   static const String cacheKey = 'cached_books';
   static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
   );
 
   BookRepositoryImpl(this.sharedPrefs);
+
+  Map<String, String> _headers({bool json = true}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'X-API-KEY': apiKey,
+    };
+  }
 
   Future<bool> _isOnline() async {
     final connectivityResult = await _connectivity.checkConnectivity();
@@ -36,24 +44,37 @@ class BookRepositoryImpl implements BookRepository {
       final book = Book.fromMap(bookMap);
       try {
         // Check if book exists on server
-        final response = await http.get(Uri.parse('$baseUrl/book/${book.id}'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/book/${book.id}'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 404) {
           // Add new book to server
           await http.post(
             Uri.parse('$baseUrl/addBook'),
-            headers: {'Content-Type': 'application/json'},
+            headers: _headers(),
             body: jsonEncode(book.toMap()),
           );
         } else if (response.statusCode == 200) {
-          // Update existing book
+          // Update existing book with specific fields
           await http.put(
             Uri.parse('$baseUrl/updateBookDetails/${book.id}'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(book.toMap()),
+            headers: _headers(),
+            body: jsonEncode({
+              'title': book.title,
+              'description': book.description,
+              'additional_genres': book.additionalGenres.isNotEmpty
+                  ? book.additionalGenres
+                  : null,
+              'genre': book.genre,
+              'content_type': book.contentType,
+            }),
           );
+        } else {
+          print(
+              '⚠️ Unexpected status code for book ${book.id}: ${response.statusCode}');
         }
       } catch (e) {
-        // Log error, continue with next book
         print('Sync error for book ${book.id}: $e');
       }
     }
@@ -63,40 +84,68 @@ class BookRepositoryImpl implements BookRepository {
   Future<void> addBook(Book book) async {
     final db = await _database;
     final String bookId = book.id.isEmpty ? const Uuid().v4() : book.id;
+
+    // Verify if book exists locally
+    final localExists = Sqflite.firstIntValue(await db.rawQuery(
+          'SELECT COUNT(*) FROM books WHERE id = ?',
+          [bookId],
+        ))! >
+        0;
+
+    if (localExists) {
+      print(
+          "⚠️ El libro con ID $bookId ya existe localmente. Se omite la inserción.");
+      return;
+    }
+
     if (book.authorId.isEmpty) {
       throw Exception("Error: El libro debe tener un authorId válido.");
     }
 
     final newBook = book.copyWith(
       id: bookId,
-      views: book.views,
       content: book.content ?? {},
     );
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$baseUrl/addBook'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(newBook.toMap()),
-        );
-        if (response.statusCode != 200) {
-          throw Exception('Failed to add book to API');
+        final checkResponse = await http
+            .get(Uri.parse('$baseUrl/book/$bookId'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
+
+        if (checkResponse.statusCode == 404) {
+          final response = await http.post(
+            Uri.parse('$baseUrl/addBook'),
+            headers: _headers(),
+            body: jsonEncode(newBook.toMap()),
+          );
+
+          if (response.statusCode == 409) {
+            print("⚠️ El libro con ID $bookId ya existe en la API.");
+            // Mark as synced locally to avoid repeated attempts
+            await db.insert('books', newBook.toMap(),
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          } else if (response.statusCode == 201) {
+            await db.insert('books', newBook.toMap(),
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          } else {
+            throw Exception(
+                'Error al agregar el libro: ${response.statusCode} - ${response.body}');
+          }
+        } else {
+          print("⚠️ El libro con ID $bookId ya existe en la API.");
         }
       } catch (e) {
-        // Fallback to SQLite
-        await db.insert(
-          'books',
-          newBook.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        print(
+            "🌐 Error al enviar libro a API. Guardando localmente. Error: $e");
+        await db.insert('books', newBook.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
       }
     } else {
-      await db.insert(
-        'books',
-        newBook.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      print("📴 Sin conexión. Guardando localmente.");
+      await db.insert('books', newBook.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     await _cacheBooks();
@@ -108,13 +157,15 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     if (await _isOnline()) {
       try {
-        final response =
-            await http.delete(Uri.parse('$baseUrl/deleteBook/$bookId'));
+        final response = await http.delete(
+            Uri.parse('$baseUrl/deleteBook/$bookId'),
+            headers: _headers(json: false));
         if (response.statusCode != 200) {
-          throw Exception('Failed to delete book from API');
+          throw Exception(
+              'Failed to delete book from API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during deleteBook: $e');
         await db.delete('books', where: 'id = ?', whereArgs: [bookId]);
       }
     } else {
@@ -130,13 +181,14 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     if (await _isOnline()) {
       try {
-        final response =
-            await http.put(Uri.parse('$baseUrl/trashBook/$bookId'));
+        final response = await http.put(Uri.parse('$baseUrl/trashBook/$bookId'),
+            headers: _headers(json: false));
         if (response.statusCode != 200) {
-          throw Exception('Failed to trash book via API');
+          throw Exception(
+              'Failed to trash book via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during trashBook: $e');
         await db.update(
           'books',
           {'is_trashed': 1},
@@ -162,13 +214,15 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     if (await _isOnline()) {
       try {
-        final response =
-            await http.put(Uri.parse('$baseUrl/restoreBook/$bookId'));
+        final response = await http.put(
+            Uri.parse('$baseUrl/restoreBook/$bookId'),
+            headers: _headers(json: false));
         if (response.statusCode != 200) {
-          throw Exception('Failed to restore book via API');
+          throw Exception(
+              'Failed to restore book via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during restoreBook: $e');
         await db.update(
           'books',
           {'is_trashed': 0},
@@ -201,106 +255,65 @@ class BookRepositoryImpl implements BookRepository {
     List<Book>? books;
 
     if (cachedData != null) {
-      print('📦 Found cached data: $cachedData');
+      print('📦 Found cached data');
       try {
         final List<dynamic> cachedList = jsonDecode(cachedData);
-        print(
-            '🔍 Decoded cached data type: ${cachedList.runtimeType}, length: ${cachedList.length}');
-        books = cachedList.map((data) {
-          print('🔍 Parsing cached book: $data');
-          return Book.fromMap(data);
-        }).toList();
+        books = cachedList.map((data) => Book.fromMap(data)).toList();
         books = books.where((book) => book.isTrashed == trashed).toList();
         if (books.isNotEmpty) {
           print('📚 Libros obtenidos desde caché: ${books.length}');
           return books;
-        } else {
-          print('📚 No books found in cache matching trashed=$trashed');
         }
-      } catch (e, stackTrace) {
+      } catch (e) {
         print('⚠️ Error parsing cached data: $e');
-        print('📜 Stack trace: $stackTrace');
       }
-    } else {
-      print('📦 No cached data found for key: $cacheKey');
     }
 
     if (await _isOnline()) {
       try {
-        print('🌐 Making API request to $baseUrl/books?trashed=$trashed');
-        final response =
-            await http.get(Uri.parse('$baseUrl/books?trashed=$trashed'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/books?trashed=$trashed'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         print('📡 API response status: ${response.statusCode}');
-        print('📡 Raw API response: ${response.body}');
 
         if (response.statusCode == 200) {
-          dynamic decodedData = jsonDecode(response.body);
-          print('🔍 Decoded API data type: ${decodedData.runtimeType}');
-
-          // Handle stringified JSON
-          if (decodedData is String) {
-            print('🔍 API response is String, decoding again...');
-            decodedData = jsonDecode(decodedData);
-            print('🔍 Re-decoded API data type: ${decodedData.runtimeType}');
-          }
-
-          // Ensure decodedData is a List
-          if (decodedData is! List) {
-            print('⚠️ Expected a List, but got: ${decodedData.runtimeType}');
-            throw Exception('Invalid API response format: Expected a List');
-          }
-
-          print('🔍 API response contains ${decodedData.length} items');
-          books = decodedData.map((map) {
-            print('🔍 Parsing API book: $map');
-            return Book.fromMap(map);
-          }).toList();
+          final List<dynamic> decodedData = jsonDecode(response.body);
+          books = decodedData.map((map) => Book.fromMap(map)).toList();
 
           final db = await _database;
-          print('🗄️ Clearing SQLite books with is_trashed=${trashed ? 1 : 0}');
           await db.delete(
             'books',
             where: 'is_trashed = ?',
             whereArgs: [trashed ? 1 : 0],
           );
           for (var book in books) {
-            print('🗄️ Inserting book ${book.id} into SQLite');
             await db.insert(
               'books',
               book.toMap(),
               conflictAlgorithm: ConflictAlgorithm.replace,
             );
           }
-          print('📦 Caching books...');
           await _cacheBooks();
           print('📡 Libros obtenidos desde la API: ${books.length}');
           return books;
         } else {
-          print('⚠️ API returned status code: ${response.statusCode}');
-          throw Exception('Failed to fetch books: ${response.statusCode}');
+          throw Exception(
+              'Failed to fetch books: ${response.statusCode} - ${response.body}');
         }
-      } catch (e, stackTrace) {
+      } catch (e) {
         print('⚠️ Error al obtener libros desde la API: $e');
-        print('📜 Stack trace: $stackTrace');
       }
-    } else {
-      print('🌐 Device is offline, skipping API call');
     }
 
     print('📂 Falling back to SQLite');
     final db = await _database;
-    print('🗄️ Querying SQLite books with is_trashed=${trashed ? 1 : 0}');
     final List<Map<String, dynamic>> result = await db.query(
       'books',
       where: 'is_trashed = ?',
       whereArgs: [trashed ? 1 : 0],
     );
-    print('🗄️ SQLite query returned ${result.length} rows');
-    books = result.map((map) {
-      print('🔍 Parsing SQLite book: $map');
-      return Book.fromMap(map);
-    }).toList();
-    print('📦 Caching books from SQLite...');
+    books = result.map((map) => Book.fromMap(map)).toList();
     await _cacheBooks();
 
     print('💾 Libros obtenidos desde SQLite: ${books.length}');
@@ -311,18 +324,22 @@ class BookRepositoryImpl implements BookRepository {
   Future<Book?> getBookById(String bookId) async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(Uri.parse('$baseUrl/book/$bookId'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/book/$bookId'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final book = Book.fromMap(jsonDecode(response.body));
-          // Update local SQLite
           final db = await _database;
           await db.insert('books', book.toMap(),
               conflictAlgorithm: ConflictAlgorithm.replace);
           await _cacheBooks();
           return book;
+        } else if (response.statusCode == 404) {
+          print('⚠️ Book $bookId not found on server');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during getBookById: $e');
       }
     }
 
@@ -344,13 +361,15 @@ class BookRepositoryImpl implements BookRepository {
   Future<void> updateBookViews(String bookId) async {
     if (await _isOnline()) {
       try {
-        final response =
-            await http.put(Uri.parse('$baseUrl/updateViews/$bookId'));
+        final response = await http.put(
+            Uri.parse('$baseUrl/updateViews/$bookId'),
+            headers: _headers(json: false));
         if (response.statusCode != 200) {
-          throw Exception('Failed to update views via API');
+          throw Exception(
+              'Failed to update views via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during updateBookViews: $e');
         final db = await _database;
         await db.rawUpdate(
             'UPDATE books SET views = views + 1 WHERE id = ?', [bookId]);
@@ -371,7 +390,7 @@ class BookRepositoryImpl implements BookRepository {
       try {
         final response = await http.post(
           Uri.parse('$baseUrl/rateBook'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headers(),
           body: jsonEncode({
             'book_id': bookId,
             'user_id': userId,
@@ -379,10 +398,11 @@ class BookRepositoryImpl implements BookRepository {
           }),
         );
         if (response.statusCode != 200) {
-          throw Exception('Failed to rate book via API');
+          throw Exception(
+              'Failed to rate book via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during rateBook: $e');
         final db = await _database;
         await db.insert(
           'book_ratings',
@@ -455,12 +475,13 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> searchBooks(String query) async {
     if (await _isOnline()) {
       try {
-        final response =
-            await http.get(Uri.parse('$baseUrl/searchBooks?query=$query'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/searchBooks?query=$query'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
-          // Update local SQLite
           final db = await _database;
           for (var book in books) {
             await db.insert('books', book.toMap(),
@@ -470,7 +491,7 @@ class BookRepositoryImpl implements BookRepository {
           return books;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during searchBooks: $e');
       }
     }
 
@@ -488,12 +509,13 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getBooksByAuthor(String authorId) async {
     if (await _isOnline()) {
       try {
-        final response =
-            await http.get(Uri.parse('$baseUrl/booksByAuthor/$authorId'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/booksByAuthor/$authorId'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
-          // Update local SQLite
           final db = await _database;
           for (var book in books) {
             await db.insert('books', book.toMap(),
@@ -503,7 +525,7 @@ class BookRepositoryImpl implements BookRepository {
           return books;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during getBooksByAuthor: $e');
       }
     }
 
@@ -521,11 +543,13 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getTopRatedBooks() async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(Uri.parse('$baseUrl/topRatedBooks'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/topRatedBooks'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
-          // Update local SQLite
           final db = await _database;
           for (var book in books) {
             await db.insert('books', book.toMap(),
@@ -535,7 +559,7 @@ class BookRepositoryImpl implements BookRepository {
           return books;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during getTopRatedBooks: $e');
       }
     }
 
@@ -554,11 +578,13 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getMostViewedBooks() async {
     if (await _isOnline()) {
       try {
-        final response = await http.get(Uri.parse('$baseUrl/mostViewedBooks'));
+        final response = await http
+            .get(Uri.parse('$baseUrl/mostViewedBooks'),
+                headers: _headers(json: false))
+            .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
-          // Update local SQLite
           final db = await _database;
           for (var book in books) {
             await db.insert('books', book.toMap(),
@@ -568,7 +594,7 @@ class BookRepositoryImpl implements BookRepository {
           return books;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during getMostViewedBooks: $e');
       }
     }
 
@@ -590,14 +616,15 @@ class BookRepositoryImpl implements BookRepository {
       try {
         final response = await http.put(
           Uri.parse('$baseUrl/updateBookContent/$bookId'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headers(),
           body: jsonEncode({'content': content}),
         );
         if (response.statusCode != 200) {
-          throw Exception('Failed to update content via API');
+          throw Exception(
+              'Failed to update content via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during updateBookContent: $e');
         final db = await _database;
         await db.update(
           'books',
@@ -627,14 +654,15 @@ class BookRepositoryImpl implements BookRepository {
       try {
         final response = await http.put(
           Uri.parse('$baseUrl/updatePublicationDate/$bookId'),
-          headers: {'Content-Type': 'application/json'},
+          headers: _headers(),
           body: jsonEncode({'publication_date': publicationDate}),
         );
         if (response.statusCode != 200) {
-          throw Exception('Failed to update publication date via API');
+          throw Exception(
+              'Failed to update publication date via API: ${response.statusCode}');
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('API error during updateBookPublicationDate: $e');
         final db = await _database;
         await db.update(
           'books',
@@ -678,14 +706,15 @@ class BookRepositoryImpl implements BookRepository {
         try {
           final response = await http.put(
             Uri.parse('$baseUrl/updateBookDetails/$bookId'),
-            headers: {'Content-Type': 'application/json'},
+            headers: _headers(),
             body: jsonEncode(values),
           );
           if (response.statusCode != 200) {
-            throw Exception('Failed to update book details via API');
+            throw Exception(
+                'Failed to update book details via API: ${response.statusCode}');
           }
         } catch (e) {
-          // Fallback to SQLite
+          print('API error during updateBookDetails: $e');
           final db = await _database;
           await db
               .update('books', values, where: 'id = ?', whereArgs: [bookId]);
@@ -704,5 +733,22 @@ class BookRepositoryImpl implements BookRepository {
     final db = await _database;
     final List<Map<String, dynamic>> result = await db.query('books');
     await sharedPrefs.setValue(cacheKey, jsonEncode(result));
+    print('📦 Cached ${result.length} books');
+  }
+
+  Future<void> testConnection() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/books'), headers: _headers(json: false))
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        print('✅ Conexión con backend exitosa: ${response.body}');
+      } else {
+        print(
+            '⚠️ Conexión fallida - Código: ${response.statusCode}, Motivo: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      print('❌ Error al conectar con el backend: $e');
+    }
   }
 }

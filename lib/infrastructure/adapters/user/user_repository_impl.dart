@@ -14,14 +14,23 @@ class UserRepositoryImpl implements UserRepository {
   final SharedPrefsService sharedPrefs;
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   final Connectivity _connectivity = Connectivity();
-  static String apiUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String apiUrl =
+      (dotenv.env['API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
-    seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
+    seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '10') ?? 10,
   );
 
   UserRepositoryImpl(this.sharedPrefs);
 
   Future<Database> get _database async => await _dbHelper.database;
+
+  Map<String, String> _headers({bool json = true}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'X-API-KEY': apiKey,
+    };
+  }
 
   Future<bool> _isOnline() async {
     final connectivityResult = await _connectivity.checkConnectivity();
@@ -41,11 +50,11 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .post(
               Uri.parse('$apiUrl/register'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({
                 'username': user.username,
                 'email': user.email,
-                'password': user.password, // Note: API should handle hashing
+                'password': user.password, // API handles hashing
                 'bio': user.bio,
                 'is_admin': user.isAdmin,
               }),
@@ -59,16 +68,20 @@ class UserRepositoryImpl implements UserRepository {
             where: 'id = ?',
             whereArgs: [user.id],
           );
+        } else {
+          print(
+              '⚠️ Failed to sync user ${user.id}: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('Sync error for user ${user.id}: $e');
       }
     }
 
-    // Sync server users to local (assuming a /users endpoint exists)
+    // Sync server users to local
     try {
-      final response =
-          await http.get(Uri.parse('$apiUrl/users')).timeout(apiTimeout);
+      final response = await http
+          .get(Uri.parse('$apiUrl/getAllUsers'), headers: _headers(json: false))
+          .timeout(apiTimeout);
       if (response.statusCode == 200) {
         final List<dynamic> serverUsers = jsonDecode(response.body);
         for (var serverUser in serverUsers) {
@@ -100,8 +113,8 @@ class UserRepositoryImpl implements UserRepository {
               },
               conflictAlgorithm: ConflictAlgorithm.replace,
             );
-          } else {
-            // Update existing user
+          } else if (existing.first['sync'] == 0) {
+            // Update existing user only if not synced
             await db.update(
               'users',
               {
@@ -118,6 +131,24 @@ class UserRepositoryImpl implements UserRepository {
             );
           }
         }
+
+        // Remove local users not on server
+        final localUsers = await db.query('users');
+        final serverUserIds = serverUsers.map((u) => u['id'] as String).toSet();
+        for (var localUser in localUsers) {
+          final localUserId = localUser['id'] as String;
+          if (!serverUserIds.contains(localUserId)) {
+            await db.delete(
+              'users',
+              where: 'id = ?',
+              whereArgs: [localUserId],
+            );
+            print('🗑️ Removed local user $localUserId not found on server');
+          }
+        }
+      } else {
+        print(
+            '⚠️ Failed to fetch server users: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       print('Error syncing server users to local: $e');
@@ -141,7 +172,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .post(
               Uri.parse('$apiUrl/followAuthor'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'user_id': userId, 'author_id': authorId}),
             )
             .timeout(apiTimeout);
@@ -152,6 +183,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'user_id = ? AND author_id = ?',
             whereArgs: [userId, authorId],
           );
+        } else {
+          print(
+              '⚠️ Failed to sync follower $userId-$authorId: ${response.statusCode}');
         }
       } catch (e) {
         print('Sync error for follower $userId-$authorId: $e');
@@ -165,9 +199,8 @@ class UserRepositoryImpl implements UserRepository {
     for (var userId in userIds) {
       try {
         final response = await http
-            .get(
-              Uri.parse('$apiUrl/followedAuthors/$userId'),
-            )
+            .get(Uri.parse('$apiUrl/getFollowedAuthors/$userId'),
+                headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final serverAuthorIds = List<String>.from(jsonDecode(response.body));
@@ -204,6 +237,9 @@ class UserRepositoryImpl implements UserRepository {
               );
             }
           }
+        } else {
+          print(
+              '⚠️ Failed to sync followers for user $userId: ${response.statusCode}');
         }
       } catch (e) {
         print('Error syncing followers for user $userId: $e');
@@ -240,7 +276,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .post(
               Uri.parse('$apiUrl/register'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({
                 'username': user.username,
                 'email': user.email,
@@ -258,6 +294,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'id = ?',
             whereArgs: [user.id],
           );
+        } else {
+          print(
+              '⚠️ Failed to register user ${user.id}: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during register: $e');
@@ -275,7 +314,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .post(
               Uri.parse('$apiUrl/login'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'email': email, 'password': password}),
             )
             .timeout(apiTimeout);
@@ -295,6 +334,10 @@ class UserRepositoryImpl implements UserRepository {
           );
           await _saveUserSession(user);
           return user;
+        } else if (response.statusCode == 404) {
+          print('⚠️ User with email $email not found on server');
+        } else {
+          print('⚠️ Login failed: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during login: $e');
@@ -336,7 +379,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .put(
               Uri.parse('$apiUrl/updateUser/${user.id}'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({
                 'username': user.username,
                 'email': user.email,
@@ -352,6 +395,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'id = ?',
             whereArgs: [user.id],
           );
+        } else {
+          print(
+              '⚠️ Failed to update user ${user.id}: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during updateUser: $e');
@@ -377,7 +423,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .put(
               Uri.parse('$apiUrl/changePassword/$userId'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'new_password': newPassword}),
             )
             .timeout(apiTimeout);
@@ -388,6 +434,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'id = ?',
             whereArgs: [userId],
           );
+        } else {
+          print(
+              '⚠️ Failed to change password for user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during changePassword: $e');
@@ -398,16 +447,25 @@ class UserRepositoryImpl implements UserRepository {
 
   @override
   Future<User?> getUserById(String userId) async {
+    final db = await _database;
+    final localResult =
+        await db.query('users', where: 'id = ?', whereArgs: [userId]);
+
+    if (localResult.isNotEmpty && localResult.first['sync'] == 1) {
+      print('📍 Returning synced user $userId from local database');
+      return User.fromMap(localResult.first);
+    }
+
     if (await _isOnline()) {
       try {
         final response = await http
-            .get(Uri.parse('$apiUrl/user/$userId'))
+            .get(Uri.parse('$apiUrl/getUser/$userId'),
+                headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final user =
               User.fromMap(jsonDecode(response.body)).copyWith(sync: true);
           // Update local SQLite
-          final db = await _database;
           final existing =
               await db.query('users', where: 'id = ?', whereArgs: [userId]);
           final salt = existing.isNotEmpty
@@ -421,17 +479,25 @@ class UserRepositoryImpl implements UserRepository {
                 .toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
+          print('📡 Fetched user $userId from API');
           return user;
+        } else if (response.statusCode == 404) {
+          print('⚠️ User $userId not found on server');
+          // Remove from local database if exists
+          if (localResult.isNotEmpty) {
+            await db.delete('users', where: 'id = ?', whereArgs: [userId]);
+            print('🗑️ Removed local user $userId not found on server');
+          }
+        } else {
+          print(
+              '⚠️ Failed to fetch user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during getUserById: $e');
       }
     }
 
-    final db = await _database;
-    final result =
-        await db.query('users', where: 'id = ?', whereArgs: [userId]);
-    return result.isNotEmpty ? User.fromMap(result.first) : null;
+    return localResult.isNotEmpty ? User.fromMap(localResult.first) : null;
   }
 
   @override
@@ -449,7 +515,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .put(
               Uri.parse('$apiUrl/updateBio/$userId'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'bio': bio}),
             )
             .timeout(apiTimeout);
@@ -460,6 +526,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'id = ?',
             whereArgs: [userId],
           );
+        } else {
+          print(
+              '⚠️ Failed to update bio for user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during updateUserBio: $e');
@@ -476,10 +545,12 @@ class UserRepositoryImpl implements UserRepository {
     if (await _isOnline()) {
       try {
         final response = await http
-            .delete(Uri.parse('$apiUrl/deleteUser/$userId'))
+            .delete(Uri.parse('$apiUrl/deleteUser/$userId'),
+                headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode != 200) {
-          throw Exception('Failed to delete user from API');
+          print(
+              '⚠️ Failed to delete user $userId from API: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during deleteUser: $e');
@@ -504,9 +575,8 @@ class UserRepositoryImpl implements UserRepository {
     if (await _isOnline()) {
       try {
         final response = await http
-            .get(
-              Uri.parse('$apiUrl/searchUsers?query=$query'),
-            )
+            .get(Uri.parse('$apiUrl/searchUsers?query=$query'),
+                headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
@@ -531,6 +601,9 @@ class UserRepositoryImpl implements UserRepository {
             );
           }
           return users;
+        } else {
+          print(
+              '⚠️ Failed to search users: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during searchUsers: $e');
@@ -560,7 +633,7 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .post(
               Uri.parse('$apiUrl/followAuthor'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'user_id': userId, 'author_id': authorId}),
             )
             .timeout(apiTimeout);
@@ -571,6 +644,9 @@ class UserRepositoryImpl implements UserRepository {
             where: 'user_id = ? AND author_id = ?',
             whereArgs: [userId, authorId],
           );
+        } else {
+          print(
+              '⚠️ Failed to follow author $authorId for user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during followAuthor: $e');
@@ -593,12 +669,15 @@ class UserRepositoryImpl implements UserRepository {
         final response = await http
             .delete(
               Uri.parse('$apiUrl/unfollowAuthor'),
-              headers: {'Content-Type': 'application/json'},
+              headers: _headers(),
               body: jsonEncode({'user_id': userId, 'author_id': authorId}),
             )
             .timeout(apiTimeout);
         if (response.statusCode == 200) {
           // No sync field to update since record is deleted
+        } else {
+          print(
+              '⚠️ Failed to unfollow author $authorId for user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during unfollowAuthor: $e');
@@ -612,9 +691,8 @@ class UserRepositoryImpl implements UserRepository {
     if (await _isOnline()) {
       try {
         final response = await http
-            .get(
-              Uri.parse('$apiUrl/followedAuthors/$userId'),
-            )
+            .get(Uri.parse('$apiUrl/getFollowedAuthors/$userId'),
+                headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode == 200) {
           final List<dynamic> authorIds = jsonDecode(response.body);
@@ -637,6 +715,9 @@ class UserRepositoryImpl implements UserRepository {
             );
           }
           return authorIds.cast<String>();
+        } else {
+          print(
+              '⚠️ Failed to fetch followed authors for user $userId: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
         print('API error during getFollowedAuthors: $e');
@@ -680,7 +761,7 @@ class UserRepositoryImpl implements UserRepository {
   Future<void> testConnection() async {
     try {
       final response = await http
-          .get(Uri.parse('$apiUrl/books'))
+          .get(Uri.parse('$apiUrl/getAllUsers'), headers: _headers(json: false))
           .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         print('✅ Conexión con backend exitosa: ${response.body}');

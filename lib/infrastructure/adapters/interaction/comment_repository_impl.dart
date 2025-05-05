@@ -76,8 +76,9 @@ class CommentRepositoryImpl implements CommentRepository {
     final commentId = comment.id.isEmpty ? const Uuid().v4() : comment.id;
     final newComment = comment.copyWith(id: commentId);
 
+    // Solo se calcula rootCommentId si se guarda localmente
     String? rootCommentId;
-    if (newComment.parentCommentId != null) {
+    if (!await _isOnline() && newComment.parentCommentId != null) {
       final result = await db.query(
         'comments',
         columns: ['root_comment_id'],
@@ -95,7 +96,7 @@ class CommentRepositoryImpl implements CommentRepository {
       'content': newComment.content,
       'timestamp': newComment.timestamp,
       'parent_comment_id': newComment.parentCommentId,
-      'root_comment_id': rootCommentId,
+      if (rootCommentId != null) 'root_comment_id': rootCommentId,
       'reports': newComment.reports,
     };
 
@@ -106,11 +107,15 @@ class CommentRepositoryImpl implements CommentRepository {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(commentMap),
         );
+
         if (response.statusCode != 200) {
-          throw Exception('Failed to add comment to API');
+          throw Exception('API rechazó el comentario: ${response.body}');
         }
+
+        // Opcional: podrías parsear la respuesta si quieres guardar localmente
+        // el comentario procesado por el servidor con root_comment_id correcto.
       } catch (e) {
-        // Fallback to SQLite
+        print('❌ Error API. Guardando localmente: $e');
         await db.insert('comments', commentMap);
       }
     } else {
