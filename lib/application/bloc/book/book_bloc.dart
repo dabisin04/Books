@@ -9,6 +9,9 @@ import 'book_state.dart';
 class BookBloc extends Bloc<BookEvent, BookState> {
   final BookRepository bookRepository;
   final UserRepository userRepository;
+  List<Book>? _cachedBooks;
+  DateTime? _lastFetchTime;
+  static const Duration cacheDuration = Duration(minutes: 5);
 
   BookBloc(this.bookRepository, this.userRepository) : super(BookInitial()) {
     on<LoadBooks>(_onLoadBooks);
@@ -30,13 +33,57 @@ class BookBloc extends Bloc<BookEvent, BookState> {
   }
 
   Future<void> _onLoadBooks(LoadBooks event, Emitter<BookState> emit) async {
-    emit(BookLoading());
+    print('📚 Iniciando _onLoadBooks');
+    final now = DateTime.now();
+    final shouldRefresh = event.forceRefresh ||
+        _lastFetchTime == null ||
+        now.difference(_lastFetchTime!) > cacheDuration;
+
+    print('⏰ Última carga: $_lastFetchTime');
+    print('🔄 Debe refrescar: $shouldRefresh');
+
+    if (!shouldRefresh && _cachedBooks != null && _cachedBooks!.isNotEmpty) {
+      print('📦 Usando caché: ${_cachedBooks!.length} libros');
+      emit(BookLoaded(_cachedBooks!));
+      return;
+    }
+
+    if (_cachedBooks != null) {
+      print('⏳ Cargando con caché previa: ${_cachedBooks!.length} libros');
+      emit(BookLoading(books: _cachedBooks!));
+    } else {
+      print('⏳ Cargando sin caché previa');
+      emit(BookLoading());
+    }
+
     try {
+      print('🌐 Obteniendo libros del repositorio');
       final books = await bookRepository.fetchBooks();
-      emit(BookLoaded(books));
+      print('📚 Libros obtenidos: ${books.length}');
+
+      if (books.isNotEmpty) {
+        _cachedBooks = books;
+        _lastFetchTime = now;
+        print('✅ Actualizando caché con ${books.length} libros');
+        emit(BookLoaded(books));
+      } else if (_cachedBooks != null && _cachedBooks!.isNotEmpty) {
+        print(
+            '⚠️ No se obtuvieron libros nuevos, usando caché: ${_cachedBooks!.length} libros');
+        emit(BookLoaded(_cachedBooks!));
+      } else {
+        print('⚠️ No hay libros disponibles');
+        emit(const BookLoaded([]));
+      }
     } catch (e, stackTrace) {
-      debugPrint('Error en _onLoadBooks: $e\n$stackTrace');
-      emit(const BookError("Error al cargar libros"));
+      print('❌ Error en _onLoadBooks: $e\n$stackTrace');
+      if (_cachedBooks != null && _cachedBooks!.isNotEmpty) {
+        print(
+            '🔄 Usando caché después de error: ${_cachedBooks!.length} libros');
+        emit(BookLoaded(_cachedBooks!));
+      } else {
+        print('❌ Error sin caché disponible');
+        emit(const BookError("Error al cargar libros"));
+      }
     }
   }
 
@@ -84,11 +131,10 @@ class BookBloc extends Bloc<BookEvent, BookState> {
   Future<void> _onDeleteBook(DeleteBook event, Emitter<BookState> emit) async {
     try {
       await bookRepository.deleteBook(event.bookId);
-      final updatedBooks = (state as BookLoaded)
-          .books
-          .where((book) => book.id != event.bookId)
-          .toList();
-      emit(BookLoaded(updatedBooks));
+      final books = await bookRepository.fetchBooks();
+      _cachedBooks = books;
+      _lastFetchTime = DateTime.now();
+      emit(BookLoaded(books));
     } catch (e, stackTrace) {
       debugPrint('Error en _onDeleteBook: $e\n$stackTrace');
       emit(const BookError("Error al eliminar libro"));
@@ -112,17 +158,20 @@ class BookBloc extends Bloc<BookEvent, BookState> {
   }
 
   Future<void> _onRateBook(RateBook event, Emitter<BookState> emit) async {
+    print('📝 Calificando libro ${event.bookId} con ${event.rating}');
     try {
       await bookRepository.rateBook(
           event.bookId, event.userId, event.rating.toDouble());
-      final updatedBooks = (state as BookLoaded).books.map((book) {
-        return book.id == event.bookId
-            ? book.copyWith(rating: event.rating.toDouble())
-            : book;
-      }).toList();
-      emit(BookLoaded(updatedBooks));
+
+      // Forzar recarga sin usar caché
+      _lastFetchTime = null;
+      final books = await bookRepository.fetchBooks();
+      _cachedBooks = books;
+      _lastFetchTime = DateTime.now();
+      print('✅ Libros recargados después de calificar: ${books.length}');
+      emit(BookLoaded(books));
     } catch (e, stackTrace) {
-      debugPrint('Error en _onRateBook: $e\n$stackTrace');
+      print('❌ Error al calificar libro: $e\n$stackTrace');
       emit(const BookError("Error al calificar libro"));
     }
   }
@@ -140,12 +189,19 @@ class BookBloc extends Bloc<BookEvent, BookState> {
 
   Future<void> _onGetBooksByAuthor(
       GetBooksByAuthor event, Emitter<BookState> emit) async {
+    emit(BookLoading(books: _cachedBooks ?? []));
     try {
       final books = await bookRepository.getBooksByAuthor(event.authorId);
+      _cachedBooks = books;
+      _lastFetchTime = DateTime.now();
       emit(BookLoaded(books));
     } catch (e, stackTrace) {
       debugPrint('Error en _onGetBooksByAuthor: $e\n$stackTrace');
-      emit(const BookError("Error al obtener libros por autor"));
+      if (_cachedBooks != null) {
+        emit(BookLoaded(_cachedBooks!));
+      } else {
+        emit(const BookError("Error al obtener libros por autor"));
+      }
     }
   }
 
@@ -232,20 +288,10 @@ class BookBloc extends Bloc<BookEvent, BookState> {
         contentType: event.contentType,
       );
 
-      final updatedBooks = (state as BookLoaded).books.map((book) {
-        return book.id == event.bookId
-            ? book.copyWith(
-                title: event.title ?? book.title,
-                description: event.description ?? book.description,
-                additionalGenres:
-                    event.additionalGenres ?? book.additionalGenres,
-                genre: event.genre ?? book.genre,
-                contentType: event.contentType ?? book.contentType,
-              )
-            : book;
-      }).toList();
-
-      emit(BookLoaded(updatedBooks));
+      final books = await bookRepository.fetchBooks();
+      _cachedBooks = books;
+      _lastFetchTime = DateTime.now();
+      emit(BookLoaded(books));
     } catch (e, stackTrace) {
       debugPrint('Error en _onUpdateBookDetails: $e\n$stackTrace');
       emit(const BookError("Error al actualizar detalles del libro"));
@@ -255,11 +301,10 @@ class BookBloc extends Bloc<BookEvent, BookState> {
   Future<void> _onTrashBook(TrashBook event, Emitter<BookState> emit) async {
     try {
       await bookRepository.trashBook(event.bookId);
-      final updatedBooks = (state as BookLoaded)
-          .books
-          .where((book) => book.id != event.bookId)
-          .toList();
-      emit(BookLoaded(updatedBooks));
+      final books = await bookRepository.fetchBooks();
+      _cachedBooks = books;
+      _lastFetchTime = DateTime.now();
+      emit(BookLoaded(books));
     } catch (e, stackTrace) {
       debugPrint('Error en _onTrashBook: $e\n$stackTrace');
       emit(const BookError("Error al mover el libro a la papelera"));

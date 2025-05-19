@@ -18,6 +18,8 @@ import 'package:books/presentation/widgets/home/lazy_horizontal_book_list.dart';
 import 'dart:async';
 import '../../application/bloc/user/user_event.dart';
 import 'user/profile.dart';
+import 'package:flutter/rendering.dart';
+import 'package:books/main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,28 +27,43 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   int _currentIndex = 0;
   late final PageController _pageController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  Timer? _refreshTimer;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    context.read<BookBloc>().add(LoadBooks());
+    _forceLoadBooks();
+    // Registrar el RouteObserver
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
   }
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _currentIndex);
-    context.read<BookBloc>().add(LoadBooks());
+    _forceLoadBooks();
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+
+    // Configurar un timer para recargar los libros cada 30 segundos
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        _forceLoadBooks();
+      }
+    });
+
+    // Agregar listener para cuando la pantalla se vuelve activa
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null &&
@@ -64,23 +81,67 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _pageController.dispose();
     _searchController.dispose();
+    _refreshTimer?.cancel();
+    // Desuscribir el RouteObserver
+    routeObserver.unsubscribe(this);
     super.dispose();
   }
 
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _forceLoadBooks();
+  }
+
+  @override
+  void didPushNext() {
+    super.didPushNext();
+    // Opcional: limpiar la caché cuando se navega a otra pantalla
+    context.read<BookBloc>().add(const LoadBooks(forceRefresh: true));
+  }
+
+  void _forceLoadBooks() {
+    print('🔄 Forzando carga de libros');
+    if (mounted) {
+      context.read<BookBloc>().add(const LoadBooks(forceRefresh: true));
+    }
+  }
+
   Widget _buildHomeContent() {
-    return BlocBuilder<BookBloc, BookState>(
+    return BlocConsumer<BookBloc, BookState>(
+      listener: (context, state) {
+        if (state is BookError) {
+          print('❌ Error en BookBloc: ${state.message}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${state.message}')),
+          );
+        }
+      },
+      buildWhen: (previous, current) {
+        print('🔄 Estado anterior: $previous');
+        print('🔄 Estado actual: $current');
+        // Solo reconstruir si el estado ha cambiado significativamente
+        if (previous is BookLoading && current is BookLoading) {
+          return false;
+        }
+        return true;
+      },
       builder: (context, state) {
-        if (state is BookLoading) {
+        print('🏗️ Construyendo con estado: $state');
+        if (state is BookLoading && state.books.isEmpty) {
+          print('⏳ Cargando sin libros previos');
           return const Center(child: CircularProgressIndicator());
         } else if (state is BookLoaded) {
           final List<Book> publishedBooks =
               state.books.where((book) => book.isPublished).toList();
+          print('📚 Libros publicados: ${publishedBooks.length}');
 
           if (_searchQuery.isNotEmpty) {
             final List<Book> searchResults = publishedBooks.where((book) {
               return book.title.toLowerCase().contains(_searchQuery) ||
                   book.genre.toLowerCase().contains(_searchQuery);
             }).toList();
+            print('🔍 Resultados de búsqueda: ${searchResults.length}');
             return _buildSearchResults(searchResults);
           }
 
@@ -89,9 +150,11 @@ class _HomeScreenState extends State<HomeScreen> {
               .toList()
             ..sort((a, b) => b.publicationDate!.compareTo(a.publicationDate!));
           final List<Book> mostRecentBooks = recentBooks.take(10).toList();
+          print('📅 Libros recientes: ${mostRecentBooks.length}');
 
           final List<Book> bestRatedBooks =
-              publishedBooks.where((book) => (book.rating ?? 0) > 4).toList();
+              publishedBooks.where((book) => (book.rating ?? 0) >= 4).toList();
+          print('⭐ Libros mejor calificados: ${bestRatedBooks.length}');
 
           final int totalViews =
               publishedBooks.fold(0, (prev, book) => prev + (book.views ?? 0));
@@ -103,16 +166,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   (book.views ?? 0) > 10 && (book.views ?? 0) > avgViews)
               .toList()
             ..sort((a, b) => b.views.compareTo(a.views));
+          print('👀 Libros más vistos: ${mostViewedBooks.length}');
 
           final genreSections = _buildGenreSections(publishedBooks);
 
           if (publishedBooks.isEmpty) {
+            print('⚠️ No hay libros publicados');
             return const Center(child: Text("No hay libros publicados aún"));
           }
 
           return RefreshIndicator(
             onRefresh: () async {
-              context.read<BookBloc>().add(LoadBooks());
+              print('🔄 Iniciando refresh manual');
+              _forceLoadBooks();
               await Future.delayed(const Duration(seconds: 1));
             },
             child: SingleChildScrollView(
@@ -166,8 +232,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         } else if (state is BookError) {
+          print('❌ Error en la UI: ${state.message}');
           return Center(child: Text('Error: ${state.message}'));
         }
+        print('⚠️ Estado no manejado: $state');
         return const Center(child: Text("Cargando datos..."));
       },
     );
@@ -305,6 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _currentIndex = index;
             });
+            _forceLoadBooks(); // Forzar recarga al cambiar de página
           },
         ),
         bottomNavigationBar: CustomBottomNavigationBar(
@@ -321,6 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _currentIndex = index;
               });
             }
+            _forceLoadBooks(); // Forzar recarga al tocar la barra de navegación
           },
         ),
       ),

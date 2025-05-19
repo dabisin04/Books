@@ -53,3 +53,12 @@ class FetchReplies extends CommentEvent {
   @override
   List<Object?> get props => [commentId];
 }
+
+class LoadComments extends CommentEvent {
+  final List<Comment> comments;
+
+  const LoadComments(this.comments);
+
+  @override
+  List<Object?> get props => [comments];
+}

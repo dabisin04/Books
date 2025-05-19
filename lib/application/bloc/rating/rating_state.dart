@@ -1,7 +1,11 @@
 import 'package:equatable/equatable.dart';
+import '../../../domain/entities/interaction/book_rating.dart';
 
 abstract class RatingState extends Equatable {
   const RatingState();
+
+  @override
+  List<Object?> get props => [];
 }
 
 class RatingInitial extends RatingState {
@@ -19,17 +23,19 @@ class RatingLoaded extends RatingState {
   final double globalAverage;
   final int globalCount;
   final Map<int, int> distribution;
+  final List<BookRating> userRatings;
 
   const RatingLoaded({
-    required this.userRating,
+    this.userRating,
     required this.globalAverage,
     required this.globalCount,
     required this.distribution,
+    this.userRatings = const [],
   });
 
   @override
   List<Object?> get props =>
-      [userRating, globalAverage, globalCount, distribution];
+      [userRating, globalAverage, globalCount, distribution, userRatings];
 }
 
 class RatingError extends RatingState {

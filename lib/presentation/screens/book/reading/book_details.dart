@@ -13,6 +13,7 @@ import 'package:books/application/bloc/comment/comment_bloc.dart';
 import 'package:books/application/bloc/comment/comment_event.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_state.dart';
+import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/chapter/chapter_state.dart';
 import 'package:books/application/bloc/chapter/chapter_event.dart';
@@ -34,14 +35,16 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
   String? _authorName;
   Chapter? _recentlyDeletedChapter;
+  late Book _currentBook;
 
   @override
   void initState() {
     super.initState();
+    _currentBook = widget.book;
     _fetchAuthorName();
-    context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
-    if (widget.book.has_chapters) {
-      context.read<ChapterBloc>().add(LoadChaptersByBook(widget.book.id));
+    context.read<CommentBloc>().add(FetchCommentsByBook(_currentBook.id));
+    if (_currentBook.has_chapters) {
+      context.read<ChapterBloc>().add(LoadChaptersByBook(_currentBook.id));
     }
 
     final userState = context.read<UserBloc>().state;
@@ -72,27 +75,38 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   Future<void> _fetchAuthorName() async {
-    final userState = context.read<UserBloc>().state;
-    if (userState is UserAuthenticated) {
-      final user = userState.user;
-      if (user.id == widget.book.authorId) {
-        setState(() {
-          _authorName = user.username;
-        });
-        return;
+    try {
+      final userState = context.read<UserBloc>().state;
+      if (userState is UserAuthenticated) {
+        final user = userState.user;
+        if (user.id == _currentBook.authorId) {
+          setState(() {
+            _authorName = user.username;
+          });
+          return;
+        }
       }
+
+      final author = await context
+          .read<UserBloc>()
+          .userRepository
+          .getUserById(_currentBook.authorId);
+      setState(() {
+        _authorName = author?.username ?? "Desconocido";
+      });
+    } catch (e) {
+      print('Error obteniendo nombre del autor: $e');
+      setState(() {
+        _authorName = "Desconocido";
+      });
     }
-    await Future.delayed(const Duration(milliseconds: 500));
-    setState(() {
-      _authorName = "Desconocido";
-    });
   }
 
   void _deleteChapter(Chapter chapter) {
     _recentlyDeletedChapter = chapter;
     context
         .read<ChapterBloc>()
-        .add(DeleteChapterEvent(chapter.id, widget.book.id));
+        .add(DeleteChapterEvent(chapter.id, _currentBook.id));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -118,16 +132,28 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => WriteChapterScreen(
-          book: widget.book,
+          book: _currentBook,
           chapter: chapter,
         ),
       ),
     );
   }
 
+  void _reloadBookAfterRating() async {
+    final updatedBook = await context
+        .read<BookBloc>()
+        .bookRepository
+        .getBookById(_currentBook.id);
+    if (updatedBook != null) {
+      setState(() {
+        _currentBook = updatedBook;
+      });
+    }
+  }
+
   Widget _buildFloatingActionButton(bool isAuthor) {
     if (!isAuthor) return const SizedBox();
-    if (widget.book.has_chapters) {
+    if (_currentBook.has_chapters) {
       return FloatingActionButton(
         mini: true,
         backgroundColor: Colors.redAccent[100],
@@ -136,7 +162,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         onPressed: () {
           showModalBottomSheet(
             context: context,
-            builder: (context) => NovelOptionsModal(book: widget.book),
+            builder: (context) => NovelOptionsModal(book: _currentBook),
           );
         },
       );
@@ -149,7 +175,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         onPressed: () {
           showModalBottomSheet(
             context: context,
-            builder: (context) => BookOptions(book: widget.book),
+            builder: (context) => BookOptions(book: _currentBook),
           );
         },
       );
@@ -160,7 +186,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   Widget build(BuildContext context) {
     final userState = context.watch<UserBloc>().state;
     final bool isAuthor = userState is UserAuthenticated &&
-        userState.user.id == widget.book.authorId;
+        userState.user.id == _currentBook.authorId;
     return Scaffold(
       floatingActionButton: _buildFloatingActionButton(isAuthor),
       body: CustomScrollView(
@@ -204,7 +230,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(
-                tag: widget.book.id,
+                tag: _currentBook.id,
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: _generateRandomGradient(),
@@ -217,7 +243,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.book.title,
+                          _currentBook.title,
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -231,7 +257,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                               fontSize: 16, color: Colors.white70),
                         ),
                         const SizedBox(height: 8),
-                        if (!widget.book.has_chapters) ...[
+                        if (!_currentBook.has_chapters) ...[
                           Row(
                             children: [
                               GestureDetector(
@@ -241,13 +267,16 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                   context: context,
                                   backgroundColor: Colors.transparent,
                                   isScrollControlled: true,
-                                  builder: (_) =>
-                                      RatingModal(bookId: widget.book.id),
+                                  builder: (_) => RatingModal(
+                                    bookId: _currentBook.id,
+                                    onRated:
+                                        _reloadBookAfterRating, // ← Aquí lo pasas
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                widget.book.rating.toStringAsFixed(1),
+                                _currentBook.rating.toStringAsFixed(1),
                                 style: const TextStyle(
                                     fontSize: 16, color: Colors.white),
                               ),
@@ -256,7 +285,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                   color: Colors.white, size: 20),
                               const SizedBox(width: 4),
                               Text(
-                                widget.book.views.toString(),
+                                _currentBook.views.toString(),
                                 style: const TextStyle(
                                     fontSize: 16, color: Colors.white),
                               ),
@@ -272,7 +301,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
                                   final isFav = favState is FavoriteLoaded &&
                                       favState.favoriteBookIds
-                                          .contains(widget.book.id);
+                                          .contains(_currentBook.id);
 
                                   return IconButton(
                                     icon: Icon(
@@ -287,10 +316,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                                           context.read<FavoriteBloc>();
                                       if (isFav) {
                                         favBloc.add(RemoveFavoriteEvent(
-                                            userId, widget.book.id));
+                                            userId, _currentBook.id));
                                       } else {
                                         favBloc.add(AddFavoriteEvent(
-                                            userId, widget.book.id));
+                                            userId, _currentBook.id));
                                       }
                                     },
                                   );
@@ -317,12 +346,12 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                         () => _descriptionExpanded = !_descriptionExpanded),
                     child: AnimatedCrossFade(
                       firstChild: Text(
-                        widget.book.description ?? "Sin sinopsis disponible",
+                        _currentBook.description ?? "Sin sinopsis disponible",
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      secondChild: Text(
-                          widget.book.description ?? "Sin sinopsis disponible"),
+                      secondChild: Text(_currentBook.description ??
+                          "Sin sinopsis disponible"),
                       crossFadeState: _descriptionExpanded
                           ? CrossFadeState.showSecond
                           : CrossFadeState.showFirst,
@@ -330,22 +359,22 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  widget.book.has_chapters
-                      ? const SizedBox.shrink()
-                      : Center(
-                          child: CustomButton(
-                            text: 'Leer Libro',
-                            onPressed: () {
-                              Navigator.pushNamed(
-                                context,
-                                '/read_content',
-                                arguments: widget.book,
-                              );
-                            },
-                          ),
-                        ),
+                  if (!_currentBook.has_chapters) ...[
+                    Center(
+                      child: CustomButton(
+                        text: 'Leer Libro',
+                        onPressed: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/read_content',
+                            arguments: _currentBook,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
-                  if (widget.book.has_chapters) ...[
+                  if (_currentBook.has_chapters) ...[
                     const Text(
                       'Capítulos',
                       style:
@@ -438,7 +467,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  CommentsBox(book: widget.book),
+                  CommentsBox(book: _currentBook),
                 ],
               ),
             ),

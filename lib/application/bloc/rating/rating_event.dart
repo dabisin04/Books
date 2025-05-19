@@ -4,14 +4,24 @@ abstract class RatingEvent extends Equatable {
   const RatingEvent();
 }
 
+class ClearRatingsEvent extends RatingEvent {
+  const ClearRatingsEvent();
+
+  @override
+  List<Object?> get props => [];
+}
+
 class LoadRatingsEvent extends RatingEvent {
   final String userId;
   final String bookId;
+  final int page;
+  final int limit;
 
-  const LoadRatingsEvent(this.userId, this.bookId);
+  const LoadRatingsEvent(this.userId, this.bookId,
+      {this.page = 1, this.limit = 10});
 
   @override
-  List<Object?> get props => [userId, bookId];
+  List<Object?> get props => [userId, bookId, page, limit];
 }
 
 class SubmitRatingEvent extends RatingEvent {

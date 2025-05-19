@@ -88,238 +88,238 @@ class _ProfileScreenContent extends StatelessWidget {
       },
       child: BlocBuilder<BookBloc, BookState>(
         builder: (context, bookState) {
-          if (bookState is BookLoading) {
+          if (bookState is BookLoading && bookState.books.isEmpty) {
             return const Center(child: CircularProgressIndicator());
-          } else if (bookState is BookLoaded) {
-            final allBooks = bookState.books;
-            final query = searchController.text.toLowerCase();
-            List<Book> displayedBooks;
+          }
 
-            final filteredBooks = query.isNotEmpty
-                ? allBooks
-                    .where((book) => book.title.toLowerCase().contains(query))
-                    .toList()
-                : allBooks;
-            final publishedBooks =
-                filteredBooks.where((book) => book.isPublished).toList();
-            final unpublishedBooks =
-                filteredBooks.where((book) => !book.isPublished).toList();
+          final allBooks = bookState is BookLoaded
+              ? bookState.books
+              : (bookState is BookLoading ? bookState.books : <Book>[]);
 
-            displayedBooks = selectedFilter == 'publicados'
-                ? publishedBooks
-                : unpublishedBooks;
+          final query = searchController.text.toLowerCase();
+          List<Book> displayedBooks;
 
-            return Scaffold(
-              floatingActionButton: FloatingActionButton(
-                mini: true,
-                onPressed: () {
-                  Navigator.pushNamed(context, '/write_book');
-                },
-                backgroundColor: Colors.redAccent,
-                child: Image.asset(
-                  'images/pluma.png',
-                  width: 20,
-                  height: 20,
-                  color: Colors.white,
-                ),
+          final filteredBooks = query.isNotEmpty
+              ? allBooks
+                  .where((book) => book.title.toLowerCase().contains(query))
+                  .toList()
+              : allBooks;
+          final publishedBooks =
+              filteredBooks.where((book) => book.isPublished).toList();
+          final unpublishedBooks =
+              filteredBooks.where((book) => !book.isPublished).toList();
+
+          displayedBooks = selectedFilter == 'publicados'
+              ? publishedBooks
+              : unpublishedBooks;
+
+          return Scaffold(
+            floatingActionButton: FloatingActionButton(
+              mini: true,
+              onPressed: () {
+                Navigator.pushNamed(context, '/write_book');
+              },
+              backgroundColor: Colors.redAccent,
+              child: Image.asset(
+                'images/pluma.png',
+                width: 20,
+                height: 20,
+                color: Colors.white,
               ),
-              body: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding:
-                              const EdgeInsets.fromLTRB(16.0, 74.0, 16.0, 16.0),
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.teal, Colors.greenAccent],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const CircleAvatar(
-                                radius: 40,
-                                backgroundColor: Colors.white,
-                                child: Icon(Icons.person,
-                                    size: 40, color: Colors.grey),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      user.username,
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    Wrap(
-                                      children: [
-                                        Text(
-                                          "ID: ${user.id}",
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              CustomButton(
-                                text: 'Editar',
-                                onPressed: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (context) =>
-                                        const ProfileOptionsModal(),
-                                  );
-                                },
-                              ),
-                            ],
+            ),
+            body: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding:
+                            const EdgeInsets.fromLTRB(16.0, 74.0, 16.0, 16.0),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.teal, Colors.greenAccent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
                         ),
-                        Positioned(
-                          top: 24.0,
-                          right: 16.0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent.withOpacity(0.8),
-                              borderRadius: BorderRadius.circular(6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const CircleAvatar(
+                              radius: 40,
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person,
+                                  size: 40, color: Colors.grey),
                             ),
-                            child: IconButton(
-                              icon: const Icon(Icons.delete,
-                                  size: 16, color: Colors.white),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    user.username,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const Wrap(
+                                    children: [
+                                      Text(
+                                        "ID: ",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              onPressed: () {
-                                Navigator.pushNamed(context, '/trash');
-                              },
-                              tooltip: "Papelera",
                             ),
+                            CustomButton(
+                              text: 'Editar',
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (context) =>
+                                      const ProfileOptionsModal(),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        top: 24.0,
+                        right: 16.0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.delete,
+                                size: 16, color: Colors.white),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/trash');
+                            },
+                            tooltip: "Papelera",
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar mis libros...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (value) {
+                        (context as Element).markNeedsBuild();
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => onFilterChanged('publicados'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: selectedFilter == 'publicados'
+                                  ? Colors.redAccent
+                                  : Colors.grey[300],
+                            ),
+                            child: const Text('Publicados',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => onFilterChanged('no_publicados'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: selectedFilter == 'no_publicados'
+                                  ? Colors.redAccent
+                                  : Colors.grey[300],
+                            ),
+                            child: const Text('No Publicados',
+                                style: TextStyle(color: Colors.white)),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: TextField(
-                        controller: searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar mis libros...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8.0),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      searchController.text.isNotEmpty
+                          ? 'Resultados de búsqueda'
+                          : selectedFilter == 'publicados'
+                              ? 'Libros Publicados'
+                              : 'Libros No Publicados',
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  BooksListWidget(
+                    books: displayedBooks,
+                    isTrash: false,
+                    onBookTap: (book) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookDetailsScreen(book: book),
                         ),
-                        onChanged: (value) {
-                          (context as Element).markNeedsBuild();
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => onFilterChanged('publicados'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: selectedFilter == 'publicados'
-                                    ? Colors.redAccent
-                                    : Colors.grey[300],
-                              ),
-                              child: const Text('Publicados',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () => onFilterChanged('no_publicados'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    selectedFilter == 'no_publicados'
-                                        ? Colors.redAccent
-                                        : Colors.grey[300],
-                              ),
-                              child: const Text('No Publicados',
-                                  style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        searchController.text.isNotEmpty
-                            ? 'Resultados de búsqueda'
-                            : selectedFilter == 'publicados'
-                                ? 'Libros Publicados'
-                                : 'Libros No Publicados',
-                        style: const TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    BooksListWidget(
-                      books: displayedBooks,
-                      isTrash: false,
-                      onBookTap: (book) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => BookDetailsScreen(book: book),
-                          ),
+                      );
+                    },
+                    onDismiss: (book) {
+                      if (selectedFilter == 'publicados' ||
+                          selectedFilter == 'no_publicados') {
+                        context.read<BookBloc>().add(TrashBook(book.id));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Libro movido a la papelera')),
                         );
-                      },
-                      onDismiss: (book) {
-                        if (selectedFilter == 'publicados' ||
-                            selectedFilter == 'no_publicados') {
-                          context.read<BookBloc>().add(TrashBook(book.id));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Libro movido a la papelera')),
-                          );
-                        } else {
-                          context.read<BookBloc>().add(DeleteBook(book.id));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content:
-                                    Text('Libro eliminado definitivamente')),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 60),
-                  ],
-                ),
+                      } else {
+                        context.read<BookBloc>().add(DeleteBook(book.id));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Libro eliminado definitivamente')),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 60),
+                ],
               ),
-            );
-          }
-          return const Center(child: Text("Error al cargar los libros"));
+            ),
+          );
         },
       ),
     );

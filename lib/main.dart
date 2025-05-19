@@ -46,17 +46,20 @@ import 'package:books/application/bloc/favorite/favorite_bloc.dart';
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
   await SharedPrefsService().init();
 
-  final userRepository = UserRepositoryImpl(SharedPrefsService());
-  final bookRepository = BookRepositoryImpl(SharedPrefsService());
-  final commentRepository = CommentRepositoryImpl(SharedPrefsService());
+  final sharedPrefs = SharedPrefsService();
+  final userRepository = UserRepositoryImpl(sharedPrefs);
+  final bookRepository = BookRepositoryImpl(sharedPrefs);
+  final commentRepository = CommentRepositoryImpl(sharedPrefs);
   final chapterRepository = ChapterRepositoryImpl();
-  final ratingRepository = BookRatingRepositoryImpl();
+  final ratingRepository = BookRatingRepositoryImpl(sharedPrefs);
   final favoriteRepository = FavoriteRepositoryImpl();
 
   runApp(MyApp(
@@ -126,7 +129,10 @@ class MyApp extends StatelessWidget {
             create: (_) => ChapterBloc(chapterRepository: chapterRepository),
           ),
           BlocProvider<RatingBloc>(
-            create: (_) => RatingBloc(ratingRepository: ratingRepository),
+            create: (context) => RatingBloc(
+              ratingRepository: ratingRepository,
+              bookBloc: context.read<BookBloc>(),
+            ),
           ),
           BlocProvider<FavoriteBloc>(
             create: (_) => FavoriteBloc(favoriteRepository),
@@ -134,6 +140,7 @@ class MyApp extends StatelessWidget {
         ],
         child: MaterialApp(
           scaffoldMessengerKey: scaffoldMessengerKey,
+          navigatorObservers: [routeObserver],
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,

@@ -26,6 +26,22 @@ class _CommentsBoxState extends State<CommentsBox> {
   String? _targetCommentId;
 
   @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  Future<void> _loadComments() async {
+    final comments = await context
+        .read<CommentBloc>()
+        .commentRepository
+        .fetchCommentsByBook(widget.book.id);
+    if (mounted) {
+      context.read<CommentBloc>().add(LoadComments(comments));
+    }
+  }
+
+  @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
@@ -44,26 +60,19 @@ class _CommentsBoxState extends State<CommentsBox> {
     if (text.isEmpty) return;
     final currentUserState = context.read<UserBloc>().state;
     if (currentUserState is! UserAuthenticated) return;
-    if (_commentMode == CommentMode.add) {
-      final comment = Comment(
-        userId: currentUserState.user.id,
-        bookId: widget.book.id,
-        content: text,
-        timestamp: DateTime.now().toIso8601String(),
-      );
-      context.read<CommentBloc>().add(AddComment(comment));
-    } else if (_commentMode == CommentMode.edit && _targetCommentId != null) {
-      context.read<CommentBloc>().add(UpdateComment(_targetCommentId!, text));
-    } else if (_commentMode == CommentMode.reply && _targetCommentId != null) {
-      final reply = Comment(
-        userId: currentUserState.user.id,
-        bookId: widget.book.id,
-        content: text,
-        timestamp: DateTime.now().toIso8601String(),
-        parentCommentId: _targetCommentId,
-      );
-      context.read<CommentBloc>().add(AddComment(reply));
-    }
+
+    final comment = Comment(
+      userId: currentUserState.user.id,
+      bookId: widget.book.id,
+      content: text,
+      timestamp: DateTime.now().toIso8601String(),
+      parentCommentId:
+          _commentMode == CommentMode.reply ? _targetCommentId : null,
+      rootCommentId:
+          _commentMode == CommentMode.reply ? _targetCommentId : null,
+    );
+
+    context.read<CommentBloc>().add(AddComment(comment));
     _cancelCommentMode();
   }
 
@@ -94,24 +103,31 @@ class _CommentsBoxState extends State<CommentsBox> {
     }
   }
 
-  String _getUserName(String userId) {
-    final userState = context.read<UserBloc>().state;
-    if (userState is UserAuthenticated && userState.user.id == userId) {
-      return userState.user.username;
+  Future<String> _getUserName(String userId) async {
+    try {
+      final userState = context.read<UserBloc>().state;
+      if (userState is UserAuthenticated && userState.user.id == userId) {
+        return userState.user.username;
+      }
+
+      final user =
+          await context.read<UserBloc>().userRepository.getUserById(userId);
+      return user?.username ?? 'Usuario';
+    } catch (e) {
+      print('Error obteniendo username: $e');
+      return 'Usuario';
     }
-    return userId.substring(0, 1).toUpperCase() + userId.substring(1, 5);
   }
 
   Widget _buildCommentsList(List<Comment> comments) {
     final topLevelComments =
         comments.where((c) => c.parentCommentId == null).toList();
     final Map<String, List<Comment>> repliesByRoot = {};
+
     for (var comment in comments) {
       if (comment.parentCommentId != null) {
-        final rootId = comment.rootCommentId;
-        if (rootId != null) {
-          repliesByRoot.putIfAbsent(rootId, () => []).add(comment);
-        }
+        final rootId = comment.rootCommentId ?? comment.parentCommentId!;
+        repliesByRoot.putIfAbsent(rootId, () => []).add(comment);
       }
     }
 
@@ -123,10 +139,15 @@ class _CommentsBoxState extends State<CommentsBox> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildCommentTile(topComment, indent: 0),
-            ...replies.map((reply) => _buildCommentTile(
-                  reply,
-                  indent: 20,
-                  prefixUsername: _getUserName(topComment.userId),
+            ...replies.map((reply) => FutureBuilder<String>(
+                  future: _getUserName(topComment.userId),
+                  builder: (context, snapshot) {
+                    return _buildCommentTile(
+                      reply,
+                      indent: 20,
+                      prefixUsername: snapshot.data,
+                    );
+                  },
                 )),
           ],
         );
@@ -136,13 +157,6 @@ class _CommentsBoxState extends State<CommentsBox> {
 
   Widget _buildCommentTile(Comment comment,
       {double indent = 0, String? prefixUsername}) {
-    final displayContent = prefixUsername != null
-        ? "@$prefixUsername ${comment.content}"
-        : comment.content;
-    final currentUserState = context.read<UserBloc>().state;
-    final bool isAuthor = currentUserState is UserAuthenticated &&
-        currentUserState.user.id == comment.userId;
-
     return Padding(
       padding: EdgeInsets.only(left: indent),
       child: Column(
@@ -156,15 +170,30 @@ class _CommentsBoxState extends State<CommentsBox> {
                 style: const TextStyle(fontSize: 14),
               ),
             ),
-            title: CommentAuthor(userId: comment.userId),
+            title: FutureBuilder<String>(
+              future: _getUserName(comment.userId),
+              builder: (context, snapshot) {
+                return Text(
+                  snapshot.data ?? 'Usuario',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
+                );
+              },
+            ),
             subtitle: Text(
-              displayContent,
+              prefixUsername != null
+                  ? "@$prefixUsername ${comment.content}"
+                  : comment.content,
               softWrap: true,
               overflow: TextOverflow.visible,
             ),
             trailing: PopupMenuButton<String>(
               onSelected: (value) => _onCommentAction(value, comment),
               itemBuilder: (context) {
+                final currentUserState = context.read<UserBloc>().state;
+                final bool isAuthor = currentUserState is UserAuthenticated &&
+                    currentUserState.user.id == comment.userId;
+
                 if (isAuthor) {
                   return [
                     const PopupMenuItem(
@@ -219,10 +248,16 @@ class _CommentsBoxState extends State<CommentsBox> {
   Widget build(BuildContext context) {
     return BlocListener<CommentBloc, CommentState>(
       listener: (context, state) {
-        if (state is CommentAdded ||
-            state is CommentUpdated ||
-            state is CommentDeleted) {
-          context.read<CommentBloc>().add(FetchCommentsByBook(widget.book.id));
+        if (state is CommentAdded) {
+          // No recargamos todos los comentarios, solo añadimos el nuevo
+          final currentState = context.read<CommentBloc>().state;
+          if (currentState is CommentLoaded) {
+            final updatedComments = List<Comment>.from(currentState.comments);
+            updatedComments.add(state.comment);
+            context.read<CommentBloc>().add(LoadComments(updatedComments));
+          }
+        } else if (state is CommentDeleted || state is CommentUpdated) {
+          _loadComments(); // Solo recargamos si se elimina o actualiza
         }
       },
       child: Column(

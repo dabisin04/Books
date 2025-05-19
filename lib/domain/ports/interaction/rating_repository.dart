@@ -1,3 +1,5 @@
+import '../../../domain/entities/interaction/book_rating.dart';
+
 abstract class BookRatingRepository {
   Future<void> upsertRating({
     required String userId,
@@ -14,5 +16,10 @@ abstract class BookRatingRepository {
   Future<void> deleteRating({
     required String userId,
     required String bookId,
+  });
+  Future<List<BookRating>> fetchUserRatings({
+    required String bookId,
+    int page = 1,
+    int limit = 10,
   });
 }

@@ -23,12 +23,16 @@ class CommentRepositoryImpl implements CommentRepository {
   CommentRepositoryImpl(this.sharedPrefs);
 
   String? getCurrentUserId() {
-    return sharedPrefs.getValue<String>('user_id');
+    final id = sharedPrefs.getValue<String>('user_id');
+    print('🔐 Usuario actual: $id');
+    return id;
   }
 
   Future<bool> _isOnline() async {
     final connectivityResult = await _connectivity.checkConnectivity();
-    return connectivityResult != ConnectivityResult.none;
+    final online = connectivityResult != ConnectivityResult.none;
+    print('🌐 Conectividad: ${online ? 'Online' : 'Offline'}');
+    return online;
   }
 
   Future<void> _syncLocalData() async {
@@ -36,36 +40,35 @@ class CommentRepositoryImpl implements CommentRepository {
 
     final db = await _database;
     final localComments = await db.query('comments');
+    print('🔄 Comentarios locales a sincronizar: ${localComments.length}');
     for (var commentMap in localComments) {
       final comment = Comment.fromMap(commentMap);
       try {
-        // Check if comment exists on server
         final response = await http
             .get(Uri.parse('$baseUrl/commentsByBook/${comment.bookId}'));
         final serverComments = jsonDecode(response.body) as List<dynamic>;
         final exists = serverComments.any((c) => c['id'] == comment.id);
 
         if (!exists) {
-          // Add new comment to server
+          print('📤 Enviando comentario nuevo: ${comment.id}');
           await http.post(
             Uri.parse('$baseUrl/addComment'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(comment.toMap()),
           );
         } else {
-          // Update existing comment
+          print('✏️ Actualizando comentario existente: ${comment.id}');
           await http.put(
             Uri.parse('$baseUrl/updateComment/${comment.id}'),
             headers: {
               'Content-Type': 'application/json',
-              'user_id': comment.userId,
+              'X-User-Id': comment.userId,
             },
             body: jsonEncode({'content': comment.content}),
           );
         }
       } catch (e) {
-        // Log error, continue with next comment
-        print('Sync error for comment ${comment.id}: $e');
+        print('❌ Error sincronizando ${comment.id}: $e');
       }
     }
   }
@@ -76,7 +79,8 @@ class CommentRepositoryImpl implements CommentRepository {
     final commentId = comment.id.isEmpty ? const Uuid().v4() : comment.id;
     final newComment = comment.copyWith(id: commentId);
 
-    // Solo se calcula rootCommentId si se guarda localmente
+    print('📝 Agregando comentario: ${newComment.toMap()}');
+
     String? rootCommentId;
     if (!await _isOnline() && newComment.parentCommentId != null) {
       final result = await db.query(
@@ -108,17 +112,18 @@ class CommentRepositoryImpl implements CommentRepository {
           body: jsonEncode(commentMap),
         );
 
+        print(
+            '📥 Respuesta addComment: ${response.statusCode} - ${response.body}');
+
         if (response.statusCode != 200) {
           throw Exception('API rechazó el comentario: ${response.body}');
         }
-
-        // Opcional: podrías parsear la respuesta si quieres guardar localmente
-        // el comentario procesado por el servidor con root_comment_id correcto.
       } catch (e) {
-        print('❌ Error API. Guardando localmente: $e');
+        print('❌ Error al enviar a la API. Guardando local: $e');
         await db.insert('comments', commentMap);
       }
     } else {
+      print('💾 Guardando comentario offline.');
       await db.insert('comments', commentMap);
     }
 
@@ -133,71 +138,54 @@ class CommentRepositoryImpl implements CommentRepository {
       throw Exception("Error: Usuario no autenticado.");
     }
 
-    final result = await db.query(
-      'comments',
-      where: 'id = ?',
-      whereArgs: [commentId],
-    );
-    if (result.isEmpty) {
-      throw Exception("Error: Comentario no encontrado.");
-    }
-    final comment = Comment.fromMap(result.first);
-    if (comment.userId != currentUserId) {
-      throw Exception(
-          "Error: No se tiene permiso para eliminar este comentario.");
-    }
+    print('🗑️ Eliminando comentario $commentId por usuario $currentUserId');
+
+    await db.delete('comments', where: 'id = ?', whereArgs: [commentId]);
 
     if (await _isOnline()) {
       try {
         final response = await http.delete(
           Uri.parse('$baseUrl/deleteComment/$commentId'),
-          headers: {'user_id': currentUserId},
+          headers: {'X-User-Id': currentUserId},
         );
-        if (response.statusCode != 200) {
-          throw Exception('Failed to delete comment from API');
-        }
+        print(
+            '📥 Respuesta deleteComment: ${response.statusCode} - ${response.body}');
       } catch (e) {
-        // Fallback to SQLite
-        await db.delete('comments', where: 'id = ?', whereArgs: [commentId]);
+        print('❌ API error: $e');
       }
-    } else {
-      await db.delete('comments', where: 'id = ?', whereArgs: [commentId]);
     }
-
-    if (await _isOnline()) await _syncLocalData();
   }
 
   @override
   Future<List<Comment>> fetchCommentsByBook(String bookId) async {
+    final db = await _database;
+    await db.delete('comments', where: 'book_id = ?', whereArgs: [bookId]);
+
     if (await _isOnline()) {
       try {
         final response =
             await http.get(Uri.parse('$baseUrl/commentsByBook/$bookId'));
+        print('📥 Comentarios obtenidos: ${response.statusCode}');
+
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final comments = data.map((map) => Comment.fromMap(map)).toList();
-          // Update local SQLite
-          final db = await _database;
-          await db
-              .delete('comments', where: 'book_id = ?', whereArgs: [bookId]);
+
           for (var comment in comments) {
-            await db.insert('comments', comment.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
+            await db.insert(
+              'comments',
+              comment.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
           }
           return comments;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('❌ API error: $e');
       }
     }
 
-    final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
-      'comments',
-      where: 'book_id = ?',
-      whereArgs: [bookId],
-    );
-    return result.map((map) => Comment.fromMap(map)).toList();
+    return [];
   }
 
   @override
@@ -206,10 +194,12 @@ class CommentRepositoryImpl implements CommentRepository {
       try {
         final response =
             await http.get(Uri.parse('$baseUrl/replies/$commentId'));
+        print('📥 Respuesta fetchReplies: ${response.statusCode}');
+
         if (response.statusCode == 200) {
           final List<dynamic> data = jsonDecode(response.body);
           final replies = data.map((map) => Comment.fromMap(map)).toList();
-          // Update local SQLite
+
           final db = await _database;
           for (var reply in replies) {
             await db.insert('comments', reply.toMap(),
@@ -218,7 +208,7 @@ class CommentRepositoryImpl implements CommentRepository {
           return replies;
         }
       } catch (e) {
-        // Fallback to SQLite
+        print('❌ API error fetchReplies: $e');
       }
     }
 
@@ -239,19 +229,14 @@ class CommentRepositoryImpl implements CommentRepository {
       throw Exception("Error: Usuario no autenticado.");
     }
 
-    final result = await db.query(
+    print('✏️ Editando comentario $commentId');
+
+    await db.update(
       'comments',
+      {'content': newContent},
       where: 'id = ?',
       whereArgs: [commentId],
     );
-    if (result.isEmpty) {
-      throw Exception("Error: Comentario no encontrado.");
-    }
-    final comment = Comment.fromMap(result.first);
-    if (comment.userId != currentUserId) {
-      throw Exception(
-          "Error: No se tiene permiso para actualizar este comentario.");
-    }
 
     if (await _isOnline()) {
       try {
@@ -259,31 +244,15 @@ class CommentRepositoryImpl implements CommentRepository {
           Uri.parse('$baseUrl/updateComment/$commentId'),
           headers: {
             'Content-Type': 'application/json',
-            'user_id': currentUserId,
+            'X-User-Id': currentUserId,
           },
           body: jsonEncode({'content': newContent}),
         );
-        if (response.statusCode != 200) {
-          throw Exception('Failed to update comment via API');
-        }
+        print(
+            '📥 Respuesta updateComment: ${response.statusCode} - ${response.body}');
       } catch (e) {
-        // Fallback to SQLite
-        await db.update(
-          'comments',
-          {'content': newContent},
-          where: 'id = ?',
-          whereArgs: [commentId],
-        );
+        print('❌ API error updateComment: $e');
       }
-    } else {
-      await db.update(
-        'comments',
-        {'content': newContent},
-        where: 'id = ?',
-        whereArgs: [commentId],
-      );
     }
-
-    if (await _isOnline()) await _syncLocalData();
   }
 }

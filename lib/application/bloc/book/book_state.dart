@@ -10,7 +10,13 @@ abstract class BookState extends Equatable {
 
 class BookInitial extends BookState {}
 
-class BookLoading extends BookState {}
+class BookLoading extends BookState {
+  final List<Book> books;
+  const BookLoading({this.books = const []});
+
+  @override
+  List<Object?> get props => [books];
+}
 
 class BookLoaded extends BookState {
   final List<Book> books;

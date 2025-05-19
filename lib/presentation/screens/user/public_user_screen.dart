@@ -129,49 +129,49 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: BlocBuilder<BookBloc, BookState>(
                   builder: (context, state) {
-                    if (state is BookLoading) {
+                    if (state is BookLoading && state.books.isEmpty) {
                       return const Center(child: CircularProgressIndicator());
-                    } else if (state is BookLoaded) {
-                      final publishedBooks = state.books
-                          .where((book) => book.isPublished)
-                          .toList();
-                      final query = _searchController.text.toLowerCase();
-                      final filteredBooks = query.isNotEmpty
-                          ? publishedBooks
-                              .where((book) =>
-                                  book.title.toLowerCase().contains(query))
-                              .toList()
-                          : publishedBooks;
-                      if (filteredBooks.isEmpty) {
-                        return const Center(
-                            child: Text("No hay libros publicados."));
-                      }
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: filteredBooks.length,
-                        itemBuilder: (context, index) {
-                          final book = filteredBooks[index];
-                          return Card(
-                            elevation: 2,
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            child: ListTile(
-                              title: Text(book.title),
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/bookDetails',
-                                  arguments: book,
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      );
-                    } else if (state is BookError) {
-                      return Center(child: Text("Error: ${state.message}"));
                     }
-                    return const SizedBox();
+
+                    final books = state is BookLoaded
+                        ? state.books
+                        : (state is BookLoading ? state.books : []);
+
+                    final publishedBooks =
+                        books.where((book) => book.isPublished).toList();
+                    final query = _searchController.text.toLowerCase();
+                    final filteredBooks = query.isNotEmpty
+                        ? publishedBooks
+                            .where((book) =>
+                                book.title.toLowerCase().contains(query))
+                            .toList()
+                        : publishedBooks;
+                    if (filteredBooks.isEmpty) {
+                      return const Center(
+                          child: Text("No hay libros publicados."));
+                    }
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filteredBooks.length,
+                      itemBuilder: (context, index) {
+                        final book = filteredBooks[index];
+                        return Card(
+                          elevation: 2,
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: ListTile(
+                            title: Text(book.title),
+                            onTap: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/bookDetails',
+                                arguments: book,
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    );
                   },
                 ),
               ),

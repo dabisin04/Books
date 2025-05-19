@@ -14,6 +14,7 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
     on<UpdateComment>(_onUpdateComment);
     on<FetchCommentsByBook>(_onFetchCommentsByBook);
     on<FetchReplies>(_onFetchReplies);
+    on<LoadComments>(_onLoadComments);
   }
 
   Future<void> _onAddComment(
@@ -80,7 +81,7 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
   }
 
   Future<void> _onFetchReplies(
-    FetchReplies event, Emitter<CommentState> emit) async {
+      FetchReplies event, Emitter<CommentState> emit) async {
     try {
       emit(RepliesLoading());
       final replies = await commentRepository.fetchReplies(event.commentId);
@@ -89,5 +90,9 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
       debugPrint('Error in _onFetchReplies: $e\n$stackTrace');
       emit(CommentError('Error al obtener respuestas: $e'));
     }
+  }
+
+  void _onLoadComments(LoadComments event, Emitter<CommentState> emit) {
+    emit(CommentLoaded(event.comments));
   }
 }

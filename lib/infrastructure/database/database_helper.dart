@@ -95,6 +95,7 @@ class DatabaseHelper {
         book_id TEXT NOT NULL,
         rating REAL NOT NULL CHECK (rating BETWEEN 0.5 AND 5),
         timestamp TEXT NOT NULL,
+        needs_sync INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
         FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
@@ -117,20 +118,48 @@ class DatabaseHelper {
       )
     ''');
 
-    // Tabla de Reportes
+    // Tabla de Reportes (mejorada)
     await db.execute('''
-      CREATE TABLE reports (
-        id TEXT PRIMARY KEY,
-        reporter_id TEXT NOT NULL,
-        target_id TEXT NOT NULL,
-        target_type TEXT CHECK (target_type IN ('book', 'comment')) NOT NULL,
-        reason TEXT NOT NULL,
-        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'dismissed')),
-        admin_id TEXT NULL,
-        FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
-        FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE SET NULL
-      )
-    ''');
+    CREATE TABLE reports (
+      id TEXT PRIMARY KEY,
+      reporter_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('book', 'comment', 'user')),
+      reason TEXT NOT NULL,
+      details TEXT,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'review', 'alert', 'dismissed', 'resolved')),
+      timestamp TEXT NOT NULL,
+      admin_id TEXT,
+      resolved_at TEXT,
+      FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
+      FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE SET NULL
+    )
+  ''');
+
+    // Tabla de Strikes de Usuario
+    await db.execute('''
+    CREATE TABLE user_strikes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('comment', 'username', 'behavior')),
+      reason TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      resolved INTEGER DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  ''');
+
+    // Tabla de Alertas de Reporte (por coincidencia múltiple)
+    await db.execute('''
+    CREATE TABLE report_alerts (
+      id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('book', 'comment', 'user')),
+      report_ids TEXT NOT NULL, -- JSON array of report IDs
+      generated_at TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('active', 'dismissed', 'escalated'))
+    )
+  ''');
 
     // Tabla de Favoritos
     await db.execute('''
@@ -213,11 +242,61 @@ class DatabaseHelper {
           '''CREATE TABLE follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE)''');
     }
     if (oldVersion < 7) {
+      await db.execute(
+          'ALTER TABLE book_ratings ADD COLUMN timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    }
+    if (oldVersion < 8) {
+      await db.execute(
+          'ALTER TABLE book_ratings ADD COLUMN needs_sync INTEGER DEFAULT 0');
+    }
+    if (oldVersion < 9) {
+      await db.execute(
+          'CREATE INDEX idx_book_ratings_sync ON book_ratings(needs_sync)');
+    }
+    if (oldVersion < 10) {
+      // Mejorar tabla de reportes
+      await db.execute('DROP TABLE IF EXISTS reports');
       await db.execute('''
-        ALTER TABLE books_ratings
-        rating REAL NOT NULL CHECK (rating BETWEEN 0.5 AND 5),
-        ADD COLUMN timestamp TEXT NOT NULL,
-      ''');
+    CREATE TABLE reports (
+      id TEXT PRIMARY KEY,
+      reporter_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('book', 'comment', 'user')),
+      reason TEXT NOT NULL,
+      details TEXT,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'review', 'alert', 'dismissed', 'resolved')),
+      timestamp TEXT NOT NULL,
+      admin_id TEXT,
+      resolved_at TEXT,
+      FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
+      FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE SET NULL
+    )
+  ''');
+
+      // Nueva tabla user_strikes
+      await db.execute('''
+    CREATE TABLE user_strikes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('comment', 'username', 'behavior')),
+      reason TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      resolved INTEGER DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  ''');
+
+      // Nueva tabla report_alerts
+      await db.execute('''
+    CREATE TABLE report_alerts (
+      id TEXT PRIMARY KEY,
+      target_id TEXT NOT NULL,
+      target_type TEXT NOT NULL CHECK (target_type IN ('book', 'comment', 'user')),
+      report_ids TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('active', 'dismissed', 'escalated'))
+    )
+  ''');
     }
   }
 }

@@ -15,11 +15,13 @@ class BookRepositoryImpl implements BookRepository {
   Future<Database> get _database async =>
       await DatabaseHelper.instance.database;
   static const String cacheKey = 'cached_books';
+  static const String lastSyncKey = 'last_sync_timestamp';
   static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
   static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
   );
+  static const int cacheValidityMinutes = 30; // Aumentado a 30 minutos
 
   BookRepositoryImpl(this.sharedPrefs);
 
@@ -35,6 +37,14 @@ class BookRepositoryImpl implements BookRepository {
     return connectivityResult != ConnectivityResult.none;
   }
 
+  Future<bool> _isCacheValid() async {
+    final lastSync = await sharedPrefs.getValue<String>(lastSyncKey);
+    if (lastSync == null) return false;
+    final lastSyncTime = DateTime.parse(lastSync);
+    return DateTime.now().difference(lastSyncTime).inMinutes <
+        cacheValidityMinutes;
+  }
+
   Future<void> _syncLocalData() async {
     if (!await _isOnline()) return;
 
@@ -43,20 +53,17 @@ class BookRepositoryImpl implements BookRepository {
     for (var bookMap in localBooks) {
       final book = Book.fromMap(bookMap);
       try {
-        // Check if book exists on server
         final response = await http
             .get(Uri.parse('$baseUrl/book/${book.id}'),
                 headers: _headers(json: false))
             .timeout(apiTimeout);
         if (response.statusCode == 404) {
-          // Add new book to server
           await http.post(
             Uri.parse('$baseUrl/addBook'),
             headers: _headers(),
             body: jsonEncode(book.toMap()),
           );
         } else if (response.statusCode == 200) {
-          // Update existing book with specific fields
           await http.put(
             Uri.parse('$baseUrl/updateBookDetails/${book.id}'),
             headers: _headers(),
@@ -70,42 +77,40 @@ class BookRepositoryImpl implements BookRepository {
               'content_type': book.contentType,
             }),
           );
-        } else {
-          print(
-              '⚠️ Unexpected status code for book ${book.id}: ${response.statusCode}');
         }
       } catch (e) {
         print('Sync error for book ${book.id}: $e');
       }
     }
+    await sharedPrefs.setValue(lastSyncKey, DateTime.now().toIso8601String());
   }
 
   @override
   Future<void> addBook(Book book) async {
     final db = await _database;
     final String bookId = book.id.isEmpty ? const Uuid().v4() : book.id;
-
-    // Verify if book exists locally
-    final localExists = Sqflite.firstIntValue(await db.rawQuery(
-          'SELECT COUNT(*) FROM books WHERE id = ?',
-          [bookId],
-        ))! >
-        0;
-
-    if (localExists) {
-      print(
-          "⚠️ El libro con ID $bookId ya existe localmente. Se omite la inserción.");
-      return;
-    }
+    final newBook = book.copyWith(id: bookId, content: book.content ?? {});
 
     if (book.authorId.isEmpty) {
       throw Exception("Error: El libro debe tener un authorId válido.");
     }
 
-    final newBook = book.copyWith(
-      id: bookId,
-      content: book.content ?? {},
-    );
+    await db.transaction((txn) async {
+      final localExists = Sqflite.firstIntValue(await txn.rawQuery(
+            'SELECT COUNT(*) FROM books WHERE id = ?',
+            [bookId],
+          ))! >
+          0;
+
+      if (!localExists) {
+        await txn.insert('books', newBook.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      } else {
+        print(
+            "⚠️ El libro con ID $bookId ya existe localmente. Se omite la inserción.");
+        return;
+      }
+    });
 
     if (await _isOnline()) {
       try {
@@ -123,13 +128,7 @@ class BookRepositoryImpl implements BookRepository {
 
           if (response.statusCode == 409) {
             print("⚠️ El libro con ID $bookId ya existe en la API.");
-            // Mark as synced locally to avoid repeated attempts
-            await db.insert('books', newBook.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          } else if (response.statusCode == 201) {
-            await db.insert('books', newBook.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          } else {
+          } else if (response.statusCode != 201) {
             throw Exception(
                 'Error al agregar el libro: ${response.statusCode} - ${response.body}');
           }
@@ -137,140 +136,176 @@ class BookRepositoryImpl implements BookRepository {
           print("⚠️ El libro con ID $bookId ya existe en la API.");
         }
       } catch (e) {
-        print(
-            "🌐 Error al enviar libro a API. Guardando localmente. Error: $e");
-        await db.insert('books', newBook.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace);
+        print("🌐 Error al enviar libro a API. Guardado localmente. Error: $e");
       }
     } else {
       print("📴 Sin conexión. Guardando localmente.");
-      await db.insert('books', newBook.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace);
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
+    print('➕ [Repository] addBook -> ${newBook.toMap()}');
   }
 
   @override
   Future<void> deleteBook(String bookId) async {
     final db = await _database;
+    await db.transaction((txn) async {
+      await txn.delete('books', where: 'id = ?', whereArgs: [bookId]);
+    });
+
     if (await _isOnline()) {
       try {
         final response = await http.delete(
-            Uri.parse('$baseUrl/deleteBook/$bookId'),
-            headers: _headers(json: false));
-        if (response.statusCode != 200) {
+          Uri.parse('$baseUrl/deleteBook/$bookId'),
+          headers: _headers(json: false),
+        );
+        if (response.statusCode != 200)
           throw Exception(
               'Failed to delete book from API: ${response.statusCode}');
-        }
       } catch (e) {
         print('API error during deleteBook: $e');
-        await db.delete('books', where: 'id = ?', whereArgs: [bookId]);
       }
-    } else {
-      await db.delete('books', where: 'id = ?', whereArgs: [bookId]);
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
+    print('🗑️ [Repository] deleteBook($bookId)');
   }
 
   @override
   Future<void> trashBook(String bookId) async {
     final db = await _database;
-    if (await _isOnline()) {
-      try {
-        final response = await http.put(Uri.parse('$baseUrl/trashBook/$bookId'),
-            headers: _headers(json: false));
-        if (response.statusCode != 200) {
-          throw Exception(
-              'Failed to trash book via API: ${response.statusCode}');
-        }
-      } catch (e) {
-        print('API error during trashBook: $e');
-        await db.update(
-          'books',
-          {'is_trashed': 1},
-          where: 'id = ?',
-          whereArgs: [bookId],
-        );
-      }
-    } else {
-      await db.update(
+    await db.transaction((txn) async {
+      await txn.update(
         'books',
         {'is_trashed': 1},
         where: 'id = ?',
         whereArgs: [bookId],
       );
+    });
+
+    if (await _isOnline()) {
+      try {
+        final response = await http.put(
+          Uri.parse('$baseUrl/trashBook/$bookId'),
+          headers: _headers(json: false),
+        );
+        if (response.statusCode != 200)
+          throw Exception(
+              'Failed to trash book via API: ${response.statusCode}');
+      } catch (e) {
+        print('API error during trashBook: $e');
+      }
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
+    print('🗑️ [Repository] trashBook($bookId)');
   }
 
   @override
   Future<void> restoreBook(String bookId) async {
     final db = await _database;
-    if (await _isOnline()) {
-      try {
-        final response = await http.put(
-            Uri.parse('$baseUrl/restoreBook/$bookId'),
-            headers: _headers(json: false));
-        if (response.statusCode != 200) {
-          throw Exception(
-              'Failed to restore book via API: ${response.statusCode}');
-        }
-      } catch (e) {
-        print('API error during restoreBook: $e');
-        await db.update(
-          'books',
-          {'is_trashed': 0},
-          where: 'id = ?',
-          whereArgs: [bookId],
-        );
-      }
-    } else {
-      await db.update(
+    await db.transaction((txn) async {
+      await txn.update(
         'books',
         {'is_trashed': 0},
         where: 'id = ?',
         whereArgs: [bookId],
       );
+    });
+
+    if (await _isOnline()) {
+      try {
+        final response = await http.put(
+          Uri.parse('$baseUrl/restoreBook/$bookId'),
+          headers: _headers(json: false),
+        );
+        if (response.statusCode != 200)
+          throw Exception(
+              'Failed to restore book via API: ${response.statusCode}');
+      } catch (e) {
+        print('API error during restoreBook: $e');
+      }
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
+    print('🔄 [Repository] restoreBook($bookId)');
   }
 
+  @override
   Future<List<Book>> fetchBooks({
     String? filter,
     String? sortBy,
     bool trashed = false,
   }) async {
     print(
-        '🚀 Starting fetchBooks with filter=$filter, sortBy=$sortBy, trashed=$trashed');
+        '🚀 Fetching books with filter=$filter, sortBy=$sortBy, trashed=$trashed');
 
-    final cachedData = await sharedPrefs.getValue(cacheKey);
-    List<Book>? books;
+    if (await _isCacheValid()) {
+      print('📦 Cache válida, intentando cargar desde caché');
+      final cachedData = await sharedPrefs.getValue(cacheKey);
+      if (cachedData != null) {
+        try {
+          final List<dynamic> cachedList = jsonDecode(cachedData);
+          final books = cachedList.map((data) => Book.fromMap(data)).toList();
+          var filteredBooks =
+              books.where((book) => book.isTrashed == trashed).toList();
 
-    if (cachedData != null) {
-      print('📦 Found cached data');
-      try {
-        final List<dynamic> cachedList = jsonDecode(cachedData);
-        books = cachedList.map((data) => Book.fromMap(data)).toList();
-        books = books.where((book) => book.isTrashed == trashed).toList();
-        if (books.isNotEmpty) {
-          print('📚 Libros obtenidos desde caché: ${books.length}');
-          return books;
+          print('📚 Libros en caché: ${books.length}');
+          print('📚 Libros filtrados: ${filteredBooks.length}');
+
+          // Aplicar filtro si se proporciona
+          if (filter != null && filter.isNotEmpty) {
+            filteredBooks = filteredBooks
+                .where((book) =>
+                    book.title.toLowerCase().contains(filter.toLowerCase()))
+                .toList();
+            print('🔍 Libros después de filtro: ${filteredBooks.length}');
+          }
+
+          // Aplicar ordenamiento si se proporciona
+          if (sortBy != null) {
+            switch (sortBy.toLowerCase()) {
+              case 'title':
+                filteredBooks.sort((a, b) => a.title.compareTo(b.title));
+                break;
+              case 'rating':
+                filteredBooks
+                    .sort((a, b) => (b.rating ?? 0).compareTo(a.rating ?? 0));
+                break;
+              case 'views':
+                filteredBooks
+                    .sort((a, b) => (b.views ?? 0).compareTo(a.views ?? 0));
+                break;
+            }
+            print('📊 Libros ordenados por: $sortBy');
+          }
+
+          print('✅ Retornando ${filteredBooks.length} libros desde caché');
+          _scheduleSync();
+          return filteredBooks;
+        } catch (e) {
+          print('❌ Error parsing cache: $e');
         }
-      } catch (e) {
-        print('⚠️ Error parsing cached data: $e');
       }
     }
 
+    print('🔄 Cache inválida o no disponible, cargando desde fuente');
+    return await _fetchBooksFromSource(trashed, filter: filter, sortBy: sortBy);
+  }
+
+  Future<List<Book>> _fetchBooksFromSource(bool trashed,
+      {String? filter, String? sortBy}) async {
+    print('🌐 Iniciando _fetchBooksFromSource');
+    final db = await _database;
+    List<Book> books = [];
+
     if (await _isOnline()) {
       try {
+        print('📡 Intentando obtener libros desde API');
         final response = await http
             .get(Uri.parse('$baseUrl/books?trashed=$trashed'),
                 headers: _headers(json: false))
@@ -280,44 +315,72 @@ class BookRepositoryImpl implements BookRepository {
         if (response.statusCode == 200) {
           final List<dynamic> decodedData = jsonDecode(response.body);
           books = decodedData.map((map) => Book.fromMap(map)).toList();
+          print('📚 Libros obtenidos de API: ${books.length}');
 
-          final db = await _database;
-          await db.delete(
-            'books',
-            where: 'is_trashed = ?',
-            whereArgs: [trashed ? 1 : 0],
-          );
-          for (var book in books) {
-            await db.insert(
-              'books',
-              book.toMap(),
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
+          await db.transaction((txn) async {
+            print('💾 Actualizando base de datos local');
+            await txn.delete('books',
+                where: 'is_trashed = ?', whereArgs: [trashed ? 1 : 0]);
+            for (var book in books) {
+              await txn.insert('books', book.toMap(),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          });
+
           await _cacheBooks();
-          print('📡 Libros obtenidos desde la API: ${books.length}');
-          return books;
-        } else {
-          throw Exception(
-              'Failed to fetch books: ${response.statusCode} - ${response.body}');
+          await sharedPrefs.setValue(
+              lastSyncKey, DateTime.now().toIso8601String());
+          print('✅ Sincronización completada');
         }
       } catch (e) {
-        print('⚠️ Error al obtener libros desde la API: $e');
+        print('❌ Error en API: $e');
+      }
+    } else {
+      print('📴 Sin conexión, usando base de datos local');
+    }
+
+    // Fallback a SQLite
+    String whereClause = 'is_trashed = ?';
+    List<dynamic> whereArgs = [trashed ? 1 : 0];
+
+    if (filter != null && filter.isNotEmpty) {
+      whereClause += ' AND title LIKE ?';
+      whereArgs.add('%$filter%');
+    }
+
+    String? orderBy;
+    if (sortBy != null) {
+      switch (sortBy.toLowerCase()) {
+        case 'title':
+          orderBy = 'title';
+          break;
+        case 'rating':
+          orderBy = 'rating DESC';
+          break;
+        case 'views':
+          orderBy = 'views DESC';
+          break;
       }
     }
 
-    print('📂 Falling back to SQLite');
-    final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
+    print('💾 Consultando base de datos local');
+    final result = await db.query(
       'books',
-      where: 'is_trashed = ?',
-      whereArgs: [trashed ? 1 : 0],
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: orderBy,
     );
     books = result.map((map) => Book.fromMap(map)).toList();
-    await _cacheBooks();
+    print('📚 Libros obtenidos de SQLite: ${books.length}');
 
-    print('💾 Libros obtenidos desde SQLite: ${books.length}');
+    await _cacheBooks();
     return books;
+  }
+
+  Future<void> _scheduleSync() async {
+    if (await _isOnline()) {
+      await Future.delayed(const Duration(minutes: 5), () => _syncLocalData());
+    }
   }
 
   @override
@@ -344,13 +407,8 @@ class BookRepositoryImpl implements BookRepository {
     }
 
     final db = await _database;
-    final result = await db.query(
-      'books',
-      where: 'id = ?',
-      whereArgs: [bookId],
-      limit: 1,
-    );
-
+    final result =
+        await db.query('books', where: 'id = ?', whereArgs: [bookId], limit: 1);
     if (result.isNotEmpty) {
       return Book.fromMap(result.first);
     }
@@ -359,116 +417,74 @@ class BookRepositoryImpl implements BookRepository {
 
   @override
   Future<void> updateBookViews(String bookId) async {
+    final db = await _database;
+    await db.transaction((txn) async {
+      await txn.rawUpdate(
+          'UPDATE books SET views = views + 1 WHERE id = ?', [bookId]);
+    });
+
     if (await _isOnline()) {
       try {
         final response = await http.put(
-            Uri.parse('$baseUrl/updateViews/$bookId'),
-            headers: _headers(json: false));
-        if (response.statusCode != 200) {
+          Uri.parse('$baseUrl/updateViews/$bookId'),
+          headers: _headers(json: false),
+        );
+        if (response.statusCode != 200)
           throw Exception(
               'Failed to update views via API: ${response.statusCode}');
-        }
       } catch (e) {
         print('API error during updateBookViews: $e');
-        final db = await _database;
-        await db.rawUpdate(
-            'UPDATE books SET views = views + 1 WHERE id = ?', [bookId]);
       }
-    } else {
-      final db = await _database;
-      await db.rawUpdate(
-          'UPDATE books SET views = views + 1 WHERE id = ?', [bookId]);
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
   }
 
   @override
   Future<void> rateBook(String bookId, String userId, double rating) async {
-    if (await _isOnline()) {
-      try {
-        final response = await http.post(
-          Uri.parse('$baseUrl/rateBook'),
-          headers: _headers(),
-          body: jsonEncode({
-            'book_id': bookId,
-            'user_id': userId,
-            'rating': rating,
-          }),
-        );
-        if (response.statusCode != 200) {
-          throw Exception(
-              'Failed to rate book via API: ${response.statusCode}');
-        }
-      } catch (e) {
-        print('API error during rateBook: $e');
-        final db = await _database;
-        await db.insert(
-          'book_ratings',
-          {
-            'id': '$userId-$bookId',
-            'user_id': userId,
-            'book_id': bookId,
-            'rating': rating
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-
-        final ratings = await db.query(
-          'book_ratings',
-          columns: ['rating'],
-          where: 'book_id = ?',
-          whereArgs: [bookId],
-        );
-
-        if (ratings.isNotEmpty) {
-          double avgRating = ratings.fold<double>(
-                  0, (sum, item) => sum + (item['rating'] as num).toDouble()) /
-              ratings.length;
-          await db.update(
-            'books',
-            {'rating': avgRating},
-            where: 'id = ?',
-            whereArgs: [bookId],
-          );
-        }
-      }
-    } else {
-      final db = await _database;
-      await db.insert(
+    final db = await _database;
+    await db.transaction((txn) async {
+      await txn.insert(
         'book_ratings',
         {
           'id': '$userId-$bookId',
           'user_id': userId,
           'book_id': bookId,
-          'rating': rating
+          'rating': rating,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      final ratings = await db.query(
-        'book_ratings',
-        columns: ['rating'],
-        where: 'book_id = ?',
-        whereArgs: [bookId],
-      );
-
+      final ratings = await txn.query('book_ratings',
+          columns: ['rating'], where: 'book_id = ?', whereArgs: [bookId]);
       if (ratings.isNotEmpty) {
-        double avgRating = ratings.fold<double>(
+        final avgRating = ratings.fold<double>(
                 0, (sum, item) => sum + (item['rating'] as num).toDouble()) /
             ratings.length;
-        await db.update(
-          'books',
-          {'rating': avgRating},
-          where: 'id = ?',
-          whereArgs: [bookId],
+        await txn.update('books', {'rating': avgRating},
+            where: 'id = ?', whereArgs: [bookId]);
+      }
+    });
+
+    if (await _isOnline()) {
+      try {
+        final response = await http.post(
+          Uri.parse('$baseUrl/rateBook'),
+          headers: _headers(),
+          body: jsonEncode(
+              {'book_id': bookId, 'user_id': userId, 'rating': rating}),
         );
+        if (response.statusCode != 200)
+          throw Exception(
+              'Failed to rate book via API: ${response.statusCode}');
+      } catch (e) {
+        print('API error during rateBook: $e');
       }
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
   }
 
   @override
@@ -483,10 +499,12 @@ class BookRepositoryImpl implements BookRepository {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
-          for (var book in books) {
-            await db.insert('books', book.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          }
+          await db.transaction((txn) async {
+            for (var book in books) {
+              await txn.insert('books', book.toMap(),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          });
           await _cacheBooks();
           return books;
         }
@@ -496,13 +514,11 @@ class BookRepositoryImpl implements BookRepository {
     }
 
     final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
-      'books',
-      where: 'title LIKE ? AND is_trashed = 0',
-      whereArgs: ['%$query%'],
-    );
-
-    return result.map((map) => Book.fromMap(map)).toList();
+    final result = await db.query('books',
+        where: 'title LIKE ? AND is_trashed = 0', whereArgs: ['%$query%']);
+    final books = result.map((map) => Book.fromMap(map)).toList();
+    await _cacheBooks();
+    return books;
   }
 
   @override
@@ -517,10 +533,12 @@ class BookRepositoryImpl implements BookRepository {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
-          for (var book in books) {
-            await db.insert('books', book.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          }
+          await db.transaction((txn) async {
+            for (var book in books) {
+              await txn.insert('books', book.toMap(),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          });
           await _cacheBooks();
           return books;
         }
@@ -530,13 +548,11 @@ class BookRepositoryImpl implements BookRepository {
     }
 
     final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
-      'books',
-      where: 'author_id = ? AND is_trashed = 0',
-      whereArgs: [authorId],
-    );
-
-    return result.map((map) => Book.fromMap(map)).toList();
+    final result = await db.query('books',
+        where: 'author_id = ? AND is_trashed = 0', whereArgs: [authorId]);
+    final books = result.map((map) => Book.fromMap(map)).toList();
+    await _cacheBooks();
+    return books;
   }
 
   @override
@@ -551,10 +567,12 @@ class BookRepositoryImpl implements BookRepository {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
-          for (var book in books) {
-            await db.insert('books', book.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          }
+          await db.transaction((txn) async {
+            for (var book in books) {
+              await txn.insert('books', book.toMap(),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          });
           await _cacheBooks();
           return books;
         }
@@ -564,14 +582,11 @@ class BookRepositoryImpl implements BookRepository {
     }
 
     final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
-      'books',
-      where: 'is_trashed = 0',
-      orderBy: 'rating DESC',
-      limit: 10,
-    );
-
-    return result.map((map) => Book.fromMap(map)).toList();
+    final result = await db.query('books',
+        where: 'is_trashed = 0', orderBy: 'rating DESC', limit: 10);
+    final books = result.map((map) => Book.fromMap(map)).toList();
+    await _cacheBooks();
+    return books;
   }
 
   @override
@@ -586,10 +601,12 @@ class BookRepositoryImpl implements BookRepository {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
-          for (var book in books) {
-            await db.insert('books', book.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.replace);
-          }
+          await db.transaction((txn) async {
+            for (var book in books) {
+              await txn.insert('books', book.toMap(),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          });
           await _cacheBooks();
           return books;
         }
@@ -599,19 +616,22 @@ class BookRepositoryImpl implements BookRepository {
     }
 
     final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query(
-      'books',
-      where: 'is_trashed = 0',
-      orderBy: 'views DESC',
-      limit: 10,
-    );
-
-    return result.map((map) => Book.fromMap(map)).toList();
+    final result = await db.query('books',
+        where: 'is_trashed = 0', orderBy: 'views DESC', limit: 10);
+    final books = result.map((map) => Book.fromMap(map)).toList();
+    await _cacheBooks();
+    return books;
   }
 
   @override
   Future<void> updateBookContent(
       String bookId, Map<String, dynamic> content) async {
+    final db = await _database;
+    await db.transaction((txn) async {
+      await txn.update('books', {'content': jsonEncode(content)},
+          where: 'id = ?', whereArgs: [bookId]);
+    });
+
     if (await _isOnline()) {
       try {
         final response = await http.put(
@@ -619,37 +639,27 @@ class BookRepositoryImpl implements BookRepository {
           headers: _headers(),
           body: jsonEncode({'content': content}),
         );
-        if (response.statusCode != 200) {
+        if (response.statusCode != 200)
           throw Exception(
               'Failed to update content via API: ${response.statusCode}');
-        }
       } catch (e) {
         print('API error during updateBookContent: $e');
-        final db = await _database;
-        await db.update(
-          'books',
-          {'content': jsonEncode(content)},
-          where: 'id = ?',
-          whereArgs: [bookId],
-        );
       }
-    } else {
-      final db = await _database;
-      await db.update(
-        'books',
-        {'content': jsonEncode(content)},
-        where: 'id = ?',
-        whereArgs: [bookId],
-      );
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
   }
 
   @override
   Future<void> updateBookPublicationDate(
       String bookId, String? publicationDate) async {
+    final db = await _database;
+    await db.transaction((txn) async {
+      await txn.update('books', {'publication_date': publicationDate},
+          where: 'id = ?', whereArgs: [bookId]);
+    });
+
     if (await _isOnline()) {
       try {
         final response = await http.put(
@@ -657,51 +667,41 @@ class BookRepositoryImpl implements BookRepository {
           headers: _headers(),
           body: jsonEncode({'publication_date': publicationDate}),
         );
-        if (response.statusCode != 200) {
+        if (response.statusCode != 200)
           throw Exception(
               'Failed to update publication date via API: ${response.statusCode}');
-        }
       } catch (e) {
         print('API error during updateBookPublicationDate: $e');
-        final db = await _database;
-        await db.update(
-          'books',
-          {'publication_date': publicationDate},
-          where: 'id = ?',
-          whereArgs: [bookId],
-        );
       }
-    } else {
-      final db = await _database;
-      await db.update(
-        'books',
-        {'publication_date': publicationDate},
-        where: 'id = ?',
-        whereArgs: [bookId],
-      );
     }
 
     await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+    _scheduleSync();
   }
 
   @override
-  Future<void> updateBookDetails(String bookId,
-      {String? title,
-      String? description,
-      List<String>? additionalGenres,
-      String? genre,
-      String? contentType}) async {
+  Future<void> updateBookDetails(
+    String bookId, {
+    String? title,
+    String? description,
+    List<String>? additionalGenres,
+    String? genre,
+    String? contentType,
+  }) async {
     final values = <String, dynamic>{};
     if (title != null) values['title'] = title;
     if (description != null) values['description'] = description;
-    if (additionalGenres != null) {
+    if (additionalGenres != null)
       values['additional_genres'] = jsonEncode(additionalGenres);
-    }
     if (genre != null) values['genre'] = genre;
     if (contentType != null) values['content_type'] = contentType;
 
     if (values.isNotEmpty) {
+      final db = await _database;
+      await db.transaction((txn) async {
+        await txn.update('books', values, where: 'id = ?', whereArgs: [bookId]);
+      });
+
       if (await _isOnline()) {
         try {
           final response = await http.put(
@@ -709,31 +709,27 @@ class BookRepositoryImpl implements BookRepository {
             headers: _headers(),
             body: jsonEncode(values),
           );
-          if (response.statusCode != 200) {
+          if (response.statusCode != 200)
             throw Exception(
                 'Failed to update book details via API: ${response.statusCode}');
-          }
         } catch (e) {
           print('API error during updateBookDetails: $e');
-          final db = await _database;
-          await db
-              .update('books', values, where: 'id = ?', whereArgs: [bookId]);
         }
-      } else {
-        final db = await _database;
-        await db.update('books', values, where: 'id = ?', whereArgs: [bookId]);
       }
-    }
 
-    await _cacheBooks();
-    if (await _isOnline()) await _syncLocalData();
+      await _cacheBooks();
+      _scheduleSync();
+      print('✏️ [Repository] updateBookDetails($bookId) -> $values');
+    }
   }
 
   Future<void> _cacheBooks() async {
+    print('📦 Iniciando _cacheBooks');
     final db = await _database;
-    final List<Map<String, dynamic>> result = await db.query('books');
+    final result = await db.query('books');
+    print('📚 Libros a cachear: ${result.length}');
     await sharedPrefs.setValue(cacheKey, jsonEncode(result));
-    print('📦 Cached ${result.length} books');
+    print('✅ Cache actualizada');
   }
 
   Future<void> testConnection() async {

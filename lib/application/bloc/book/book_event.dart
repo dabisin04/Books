@@ -8,7 +8,13 @@ abstract class BookEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class LoadBooks extends BookEvent {}
+class LoadBooks extends BookEvent {
+  final bool forceRefresh;
+  const LoadBooks({this.forceRefresh = false});
+
+  @override
+  List<Object?> get props => [forceRefresh];
+}
 
 class GetBookByIdEvent extends BookEvent {
   final String bookId;
