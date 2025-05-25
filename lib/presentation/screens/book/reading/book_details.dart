@@ -21,6 +21,9 @@ import 'package:books/domain/entities/book/book.dart';
 import 'package:books/domain/entities/book/chapter.dart';
 import '../../../widgets/book/comments_box.dart';
 import '../../../widgets/global/custom_button.dart';
+import 'package:books/application/bloc/report/report_bloc.dart';
+import 'package:books/application/bloc/report/report_event.dart';
+import 'package:books/domain/entities/interaction/report.dart';
 
 class BookDetailsScreen extends StatefulWidget {
   final Book book;
@@ -151,6 +154,80 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     }
   }
 
+  void _showReportDialog() {
+    final TextEditingController reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reportar libro'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Por favor, describe el motivo del reporte:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Motivo del reporte...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final userState = context.read<UserBloc>().state;
+              if (userState is UserAuthenticated) {
+                // Obtener el usuario actualizado para asegurar que tenemos el ID correcto
+                final currentUser = await context
+                    .read<UserBloc>()
+                    .userRepository
+                    .getUserById(userState.user.id);
+                if (currentUser == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Error: Usuario no encontrado'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
+
+                final report = Report(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  reporterId: currentUser.id,
+                  targetId: _currentBook.id,
+                  targetType: 'book',
+                  reason: reasonController.text.trim(),
+                  status: 'pending',
+                  timestamp: DateTime.now(),
+                );
+
+                print(
+                    '📝 Creando reporte con ID de usuario: ${currentUser.id}');
+                context.read<ReportBloc>().add(SubmitReport(report));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reporte enviado correctamente'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFloatingActionButton(bool isAuthor) {
     if (!isAuthor) return const SizedBox();
     if (_currentBook.has_chapters) {
@@ -204,11 +281,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
               PopupMenuButton<String>(
                 onSelected: (value) {
                   if (value == 'report') {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content:
-                              Text("Funcionalidad de reporte próximamente")),
-                    );
+                    _showReportDialog();
                   } else if (value == 'favorite') {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -251,10 +324,31 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          "Autor: ${_authorName ?? 'Cargando...'}",
-                          style: const TextStyle(
-                              fontSize: 16, color: Colors.white70),
+                        GestureDetector(
+                          onTap: () async {
+                            final userState = context.read<UserBloc>().state;
+                            if (userState is UserAuthenticated) {
+                              final user = userState.user;
+                              if (user.id != _currentBook.authorId) {
+                                final author = await context
+                                    .read<UserBloc>()
+                                    .userRepository
+                                    .getUserById(_currentBook.authorId);
+                                if (author != null && mounted) {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/public_profile',
+                                    arguments: author,
+                                  );
+                                }
+                              }
+                            }
+                          },
+                          child: Text(
+                            "Autor: ${_authorName ?? 'Cargando...'}",
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.white70),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         if (!_currentBook.has_chapters) ...[

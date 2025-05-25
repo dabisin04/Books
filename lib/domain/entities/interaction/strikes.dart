@@ -5,11 +5,8 @@ class Strike extends Equatable {
   final String id;
   final String userId;
   final String reason;
-  final DateTime dateIssued;
-  final String? relatedEntityId; // e.g. commentId, bookId
-  final String? entityType; // 'comment', 'book', etc.
-  final bool justified; // Si fue confirmado como válido
-  final bool resolved;
+  final int strikeCount;
+  final bool isActive;
 
   static const Uuid _uuid = Uuid();
 
@@ -17,11 +14,8 @@ class Strike extends Equatable {
     String? id,
     required this.userId,
     required this.reason,
-    required this.dateIssued,
-    this.relatedEntityId,
-    this.entityType,
-    this.justified = true,
-    this.resolved = false,
+    this.strikeCount = 1,
+    this.isActive = true,
   }) : id = id ?? _uuid.v4();
 
   Map<String, dynamic> toMap() {
@@ -29,11 +23,8 @@ class Strike extends Equatable {
       'id': id,
       'user_id': userId,
       'reason': reason,
-      'date_issued': dateIssued.toIso8601String(),
-      'related_entity_id': relatedEntityId,
-      'entity_type': entityType,
-      'justified': justified ? 1 : 0,
-      'resolved': resolved ? 1 : 0,
+      'strike_count': strikeCount,
+      'is_active': isActive ? 1 : 0,
     };
   }
 
@@ -42,11 +33,8 @@ class Strike extends Equatable {
       id: map['id'],
       userId: map['user_id'],
       reason: map['reason'],
-      dateIssued: DateTime.parse(map['date_issued']),
-      relatedEntityId: map['related_entity_id'],
-      entityType: map['entity_type'],
-      justified: map['justified'] == 1,
-      resolved: map['resolved'] == 1,
+      strikeCount: map['strike_count'] ?? 1,
+      isActive: map['is_active'] == 1,
     );
   }
 
@@ -55,10 +43,7 @@ class Strike extends Equatable {
         id,
         userId,
         reason,
-        dateIssued,
-        relatedEntityId,
-        entityType,
-        justified,
-        resolved
+        strikeCount,
+        isActive,
       ];
 }

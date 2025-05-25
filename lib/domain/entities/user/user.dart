@@ -10,6 +10,9 @@ class User extends Equatable {
   final String? bio;
   final bool isAdmin;
   final bool sync;
+  final String status;
+  final DateTime? nameChangeDeadline;
+  final bool reportedForName;
 
   static const Uuid _uuid = Uuid();
 
@@ -22,6 +25,9 @@ class User extends Equatable {
     this.bio,
     this.isAdmin = false,
     this.sync = false,
+    this.status = 'active',
+    this.nameChangeDeadline,
+    this.reportedForName = false,
   }) : id = id ?? _uuid.v4();
 
   Map<String, dynamic> toMap() {
@@ -34,6 +40,9 @@ class User extends Equatable {
       'bio': bio,
       'is_admin': isAdmin ? 1 : 0,
       'sync': sync ? 1 : 0,
+      'status': status,
+      'name_change_deadline': nameChangeDeadline?.toIso8601String(),
+      'reported_for_name': reportedForName ? 1 : 0,
     };
   }
 
@@ -46,9 +55,16 @@ class User extends Equatable {
       salt: map['salt'] as String?,
       bio: map['bio'] as String?,
       isAdmin: map['is_admin'] is bool
-          ? map['is_admin']
+          ? map['is_admin'] as bool
           : (map['is_admin'] as int? ?? 0) == 1,
       sync: map['sync'] is bool ? map['sync'] : (map['sync'] as int? ?? 0) == 1,
+      status: map['status'] as String? ?? 'active',
+      nameChangeDeadline: map['name_change_deadline'] != null
+          ? DateTime.parse(map['name_change_deadline'] as String)
+          : null,
+      reportedForName: map['reported_for_name'] is bool
+          ? map['reported_for_name'] as bool
+          : (map['reported_for_name'] as int? ?? 0) == 1,
     );
   }
 
@@ -61,6 +77,9 @@ class User extends Equatable {
     String? bio,
     bool? isAdmin,
     bool? sync,
+    String? status,
+    DateTime? nameChangeDeadline,
+    bool? reportedForName,
   }) {
     return User(
       id: id ?? this.id,
@@ -71,10 +90,24 @@ class User extends Equatable {
       bio: bio ?? this.bio,
       isAdmin: isAdmin ?? this.isAdmin,
       sync: sync ?? this.sync,
+      status: status ?? this.status,
+      nameChangeDeadline: nameChangeDeadline ?? this.nameChangeDeadline,
+      reportedForName: reportedForName ?? this.reportedForName,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [id, username, email, password, salt, bio, isAdmin, sync];
+  List<Object?> get props => [
+        id,
+        username,
+        email,
+        password,
+        salt,
+        bio,
+        isAdmin,
+        sync,
+        status,
+        nameChangeDeadline,
+        reportedForName,
+      ];
 }

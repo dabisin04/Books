@@ -16,6 +16,8 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     on<CheckUserSession>(_onCheckUserSession);
     on<UpdateUserDetails>(_onUpdateUserDetails);
     on<ChangePassword>(_onChangePassword);
+    on<FollowUser>(_onFollowUser);
+    on<UnfollowUser>(_onUnfollowUser);
   }
 
   Future<void> _onLoginUser(LoginUser event, Emitter<UserState> emit) async {
@@ -23,7 +25,9 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     try {
       final user = await userRepository.loginUser(event.email, event.password);
       if (user != null) {
-        emit(UserAuthenticated(user: user));
+        final followedAuthors =
+            await userRepository.getFollowedAuthors(user.id);
+        emit(UserAuthenticated(user: user, followedAuthors: followedAuthors));
       } else {
         emit(const UserError(message: "Credenciales incorrectas"));
       }
@@ -47,7 +51,9 @@ class UserBloc extends Bloc<UserEvent, UserState> {
     try {
       final user = await userRepository.getUserById(event.userId);
       if (user != null) {
-        emit(UserAuthenticated(user: user));
+        final followedAuthors =
+            await userRepository.getFollowedAuthors(user.id);
+        emit(UserAuthenticated(user: user, followedAuthors: followedAuthors));
       } else {
         emit(const UserError(message: "Usuario no encontrado"));
       }
@@ -121,6 +127,43 @@ class UserBloc extends Bloc<UserEvent, UserState> {
         emit(UserPasswordChanged(user: updatedUser));
       } else {
         emit(const UserError(message: "Error al actualizar la contraseña"));
+      }
+    } catch (e) {
+      emit(UserError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onFollowUser(FollowUser event, Emitter<UserState> emit) async {
+    try {
+      await userRepository.followAuthor(event.userId, event.authorId);
+      final followedAuthors =
+          await userRepository.getFollowedAuthors(event.userId);
+      final updatedUser = await userRepository.getUserById(event.userId);
+      if (updatedUser != null) {
+        emit(UserAuthenticated(
+            user: updatedUser, followedAuthors: followedAuthors));
+        emit(UserFollowing(
+            userId: event.userId, authorId: event.authorId, isFollowing: true));
+      }
+    } catch (e) {
+      emit(UserError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onUnfollowUser(
+      UnfollowUser event, Emitter<UserState> emit) async {
+    try {
+      await userRepository.unfollowAuthor(event.userId, event.authorId);
+      final followedAuthors =
+          await userRepository.getFollowedAuthors(event.userId);
+      final updatedUser = await userRepository.getUserById(event.userId);
+      if (updatedUser != null) {
+        emit(UserAuthenticated(
+            user: updatedUser, followedAuthors: followedAuthors));
+        emit(UserFollowing(
+            userId: event.userId,
+            authorId: event.authorId,
+            isFollowing: false));
       }
     } catch (e) {
       emit(UserError(message: e.toString()));

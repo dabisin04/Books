@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_final_fields, unused_field, library_private_types_in_public_api, use_super_parameters
 
+import 'package:books/application/bloc/user/user_event.dart';
 import 'package:books/domain/ports/book/book_repository.dart';
 import 'package:books/domain/ports/user/user_repository.dart';
 import 'package:flutter/material.dart';
@@ -93,13 +94,44 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                     const SizedBox(height: 16),
                     if (currentUser == null ||
                         currentUser.id != widget.author.id)
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.blueAccent,
-                        ),
-                        child: const Text("Seguir"),
+                      BlocBuilder<UserBloc, UserState>(
+                        builder: (context, state) {
+                          if (state is UserAuthenticated) {
+                            final isFollowing = state.followedAuthors
+                                .contains(widget.author.id);
+                            return ElevatedButton(
+                              onPressed: () {
+                                if (isFollowing) {
+                                  context.read<UserBloc>().add(
+                                        UnfollowUser(
+                                          userId: state.user.id,
+                                          authorId: widget.author.id,
+                                        ),
+                                      );
+                                } else {
+                                  context.read<UserBloc>().add(
+                                        FollowUser(
+                                          userId: state.user.id,
+                                          authorId: widget.author.id,
+                                        ),
+                                      );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isFollowing
+                                    ? Colors.grey[300]
+                                    : Colors.white,
+                                foregroundColor: isFollowing
+                                    ? Colors.grey[700]
+                                    : Colors.blueAccent,
+                              ),
+                              child: Text(
+                                isFollowing ? "Dejar de seguir" : "Seguir",
+                              ),
+                            );
+                          }
+                          return const SizedBox();
+                        },
                       ),
                   ],
                 ),

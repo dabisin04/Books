@@ -4,12 +4,15 @@ import 'package:books/application/bloc/chapter/chapter_bloc.dart';
 import 'package:books/application/bloc/rating/rating_bloc.dart';
 import 'package:books/application/bloc/user/user_event.dart';
 import 'package:books/domain/entities/book/chapter.dart';
+import 'package:books/domain/entities/user/user.dart';
 import 'package:books/domain/ports/book/chapter_repository.dart';
 import 'package:books/domain/ports/interaction/rating_repository.dart';
+import 'package:books/domain/ports/interaction/report_repository.dart';
 import 'package:books/infrastructure/adapters/book/chapter_repository_impl.dart';
 import 'package:books/infrastructure/adapters/interaction/rating_repository_impl.dart';
 import 'package:books/presentation/screens/book/writing/write_book_chapter.dart';
 import 'package:books/presentation/screens/library/favorite.dart';
+import 'package:books/presentation/screens/user/public_user_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -23,9 +26,11 @@ import 'package:books/domain/theme/app_theme.dart';
 import 'package:books/application/bloc/book/book_bloc.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/comment/comment_bloc.dart';
+import 'package:books/application/bloc/report/report_bloc.dart';
 import 'package:books/infrastructure/adapters/book/book_repository_impl.dart';
 import 'package:books/infrastructure/adapters/user/user_repository_impl.dart';
 import 'package:books/infrastructure/adapters/interaction/comment_repository_impl.dart';
+import 'package:books/infrastructure/adapters/interaction/report_repository_impl.dart';
 import 'package:books/infrastructure/utils/shared_prefs_helper.dart';
 import 'package:books/presentation/screens/splash_screen.dart';
 import 'package:books/presentation/screens/auth/login.dart';
@@ -61,6 +66,7 @@ Future<void> main() async {
   final chapterRepository = ChapterRepositoryImpl();
   final ratingRepository = BookRatingRepositoryImpl(sharedPrefs);
   final favoriteRepository = FavoriteRepositoryImpl();
+  final reportRepository = ReportRepositoryImpl(sharedPrefs);
 
   runApp(MyApp(
     userRepository: userRepository,
@@ -69,6 +75,7 @@ Future<void> main() async {
     chapterRepository: chapterRepository,
     ratingRepository: ratingRepository,
     favoriteRepository: favoriteRepository,
+    reportRepository: reportRepository,
   ));
 }
 
@@ -79,6 +86,7 @@ class MyApp extends StatelessWidget {
   final ChapterRepositoryImpl chapterRepository;
   final BookRatingRepositoryImpl ratingRepository;
   final FavoriteRepositoryImpl favoriteRepository;
+  final ReportRepositoryImpl reportRepository;
 
   const MyApp({
     super.key,
@@ -88,6 +96,7 @@ class MyApp extends StatelessWidget {
     required this.chapterRepository,
     required this.ratingRepository,
     required this.favoriteRepository,
+    required this.reportRepository,
   });
 
   @override
@@ -111,6 +120,9 @@ class MyApp extends StatelessWidget {
         ),
         RepositoryProvider<FavoriteRepository>(
           create: (_) => favoriteRepository,
+        ),
+        RepositoryProvider<ReportRepository>(
+          create: (_) => reportRepository,
         ),
       ],
       child: MultiBlocProvider(
@@ -136,6 +148,9 @@ class MyApp extends StatelessWidget {
           ),
           BlocProvider<FavoriteBloc>(
             create: (_) => FavoriteBloc(favoriteRepository),
+          ),
+          BlocProvider<ReportBloc>(
+            create: (_) => ReportBloc(reportRepository),
           ),
         ],
         child: MaterialApp(
@@ -166,6 +181,10 @@ class MyApp extends StatelessWidget {
             },
             '/favorites': (context) => const FavoriteBooksScreen(),
             '/profile': (context) => const ProfileScreen(),
+            '/public_profile': (context) {
+              final user = ModalRoute.of(context)!.settings.arguments as User;
+              return PublicProfileScreen(author: user);
+            },
             '/edit_profile': (context) => const EditProfileScreen(),
             '/change_password': (context) => const ChangePasswordScreen(),
             '/write_book': (context) => const WriteBookScreen(),

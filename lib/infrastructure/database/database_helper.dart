@@ -16,6 +16,7 @@ class DatabaseHelper {
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
+    print('📂 Ruta de la base de datos: ${_database!.path}');
     return _database!;
   }
 
@@ -25,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -42,7 +43,10 @@ class DatabaseHelper {
         salt TEXT NOT NULL,
         bio TEXT,
         is_admin INTEGER DEFAULT 0,
-        sync INTEGER DEFAULT 0
+        sync INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        name_change_deadline TEXT,
+        reported_for_name INTEGER DEFAULT 0
       )
     ''');
 
@@ -239,7 +243,7 @@ class DatabaseHelper {
       await db.execute(
           'ALTER TABLE books ADD COLUMN content_type TEXT DEFAULT "book" CHECK (content_type IN ("book", "article", "review", "essay", "research", "blog", "news", "novel", "short_story", "tutorial", "guide"))');
       await db.execute(
-          '''CREATE TABLE follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE)''');
+          '''CREATE TABLE IF NOT EXISTS follows (id TEXT PRIMARY KEY, follower_id TEXT NOT NULL, followee_id TEXT NOT NULL, FOREIGN KEY (follower_id) REFERENCES users (id) ON DELETE CASCADE, FOREIGN KEY (followee_id) REFERENCES users (id) ON DELETE CASCADE)''');
     }
     if (oldVersion < 7) {
       await db.execute(
@@ -251,7 +255,7 @@ class DatabaseHelper {
     }
     if (oldVersion < 9) {
       await db.execute(
-          'CREATE INDEX idx_book_ratings_sync ON book_ratings(needs_sync)');
+          'CREATE INDEX IF NOT EXISTS idx_book_ratings_sync ON book_ratings(needs_sync)');
     }
     if (oldVersion < 10) {
       // Mejorar tabla de reportes
@@ -275,7 +279,7 @@ class DatabaseHelper {
 
       // Nueva tabla user_strikes
       await db.execute('''
-    CREATE TABLE user_strikes (
+    CREATE TABLE IF NOT EXISTS user_strikes (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('comment', 'username', 'behavior')),
@@ -288,7 +292,7 @@ class DatabaseHelper {
 
       // Nueva tabla report_alerts
       await db.execute('''
-    CREATE TABLE report_alerts (
+    CREATE TABLE IF NOT EXISTS report_alerts (
       id TEXT PRIMARY KEY,
       target_id TEXT NOT NULL,
       target_type TEXT NOT NULL CHECK (target_type IN ('book', 'comment', 'user')),
@@ -297,6 +301,10 @@ class DatabaseHelper {
       status TEXT NOT NULL CHECK (status IN ('active', 'dismissed', 'escalated'))
     )
   ''');
+    }
+    if (oldVersion < 11) {
+      await db.execute(
+          'ALTER TABLE users ADD COLUMN reported_for_name INTEGER DEFAULT 0');
     }
   }
 }

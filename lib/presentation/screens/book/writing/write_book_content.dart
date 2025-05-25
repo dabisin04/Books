@@ -216,17 +216,24 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
             .where((b) =>
                 b.id != widget.book.id && b.authorId == widget.book.authorId)
             .toList();
+
         if (previousBooks.isNotEmpty) {
           previousBooks.sort((a, b) {
             return (b.publicationDate ?? DateTime.now())
                 .compareTo(a.publicationDate ?? DateTime.now());
           });
+
           final previousBook = previousBooks.first;
           if (previousBook.content != null &&
               previousBook.content!['ops'] != null) {
             try {
               final doc = quill.Document.fromJson(previousBook.content!['ops']);
-              previousBookContent = doc.toPlainText();
+              final rawContent = doc.toPlainText().trim();
+              // ⚠️ Solo lo usaremos si el contenido actual es suficientemente largo
+              if (widget.book.title != previousBook.title &&
+                  rawContent.length > 300) {
+                previousBookContent = rawContent;
+              }
             } catch (e) {
               print('[Editor] ❗ Error al leer libro previo: $e');
             }
@@ -243,8 +250,10 @@ class _WriteBookContentScreenState extends State<WriteBookContentScreen> {
         isChapterBased: widget.book.has_chapters,
         userPrompt: userPrompt,
         currentContent: currentText,
-        previousBook: previousBookContent,
-        contentType: widget.book.contentType, // ✅ esta línea es la nueva
+        previousBook: previousBookContent?.isNotEmpty == true
+            ? previousBookContent
+            : null,
+        contentType: widget.book.contentType,
       );
 
       print('[Editor] ✅ Delta sugerido generado:');

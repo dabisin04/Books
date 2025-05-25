@@ -261,18 +261,9 @@ class UserRepositoryImpl implements UserRepository {
       throw Exception('El email o usuario ya existe');
     }
 
-    final salt = _generateSalt();
-    final hashedPassword = _hashPassword(user.password, salt);
-    final userToInsert = user.copyWith(
-      password: hashedPassword,
-      salt: salt,
-      sync: false,
-    );
-
-    await db.insert('users', userToInsert.toMap());
-
     if (await _isOnline()) {
       try {
+        print('📤 Enviando registro al servidor...');
         final response = await http
             .post(
               Uri.parse('$apiUrl/register'),
@@ -288,20 +279,34 @@ class UserRepositoryImpl implements UserRepository {
             .timeout(apiTimeout);
 
         if (response.statusCode == 201) {
-          await db.update(
-            'users',
-            {'sync': 1},
-            where: 'id = ?',
-            whereArgs: [user.id],
+          final responseData = jsonDecode(response.body);
+          print('📥 Respuesta del servidor: $responseData');
+
+          if (responseData['id'] == null) {
+            throw Exception('El servidor no devolvió un ID válido');
+          }
+
+          final serverUser = User.fromMap(responseData);
+          print('✅ Usuario registrado con ID: ${serverUser.id}');
+
+          // Usar el ID y datos del servidor
+          final userToInsert = serverUser.copyWith(
+            sync: true,
           );
+          await db.insert('users', userToInsert.toMap());
+          print('💾 Usuario guardado en DB local con ID: ${userToInsert.id}');
         } else {
+          final errorData = jsonDecode(response.body);
           print(
-              '⚠️ Failed to register user ${user.id}: ${response.statusCode} - ${response.body}');
+              '⚠️ Error en registro: ${response.statusCode} - ${errorData['error']}');
+          throw Exception(errorData['error'] ?? 'Error al registrar usuario');
         }
       } catch (e) {
-        print('API error during register: $e');
+        print('❌ Error en registro: $e');
+        throw Exception('Error al conectar con el servidor: $e');
       }
-      await _syncLocalData();
+    } else {
+      throw Exception('No hay conexión a internet');
     }
   }
 
@@ -311,6 +316,7 @@ class UserRepositoryImpl implements UserRepository {
 
     if (await _isOnline()) {
       try {
+        print('🔑 Intentando login con email: $email');
         final response = await http
             .post(
               Uri.parse('$apiUrl/login'),
@@ -320,30 +326,51 @@ class UserRepositoryImpl implements UserRepository {
             .timeout(apiTimeout);
 
         if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final user = User.fromMap(data).copyWith(sync: true);
-          // Update local SQLite
-          final salt = _generateSalt();
-          final hashedPassword = _hashPassword(password, salt);
+          final responseData = jsonDecode(response.body);
+          print('📥 Respuesta del servidor: $responseData');
+
+          if (responseData['id'] == null) {
+            print('⚠️ El servidor no devolvió un ID válido');
+            return null;
+          }
+
+          // Convertir is_admin de bool a int
+          final Map<String, dynamic> processedData =
+              Map<String, dynamic>.from(responseData);
+          processedData['is_admin'] =
+              (responseData['is_admin'] as bool) ? 1 : 0;
+
+          final serverUser = User.fromMap(processedData);
+          print('✅ Login exitoso con ID: ${serverUser.id}');
+
+          // Actualizar usuario local con datos del servidor
           await db.insert(
             'users',
-            user
-                .copyWith(password: hashedPassword, salt: salt, sync: true)
-                .toMap(),
+            serverUser.copyWith(sync: true).toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
-          await _saveUserSession(user);
-          return user;
+          print('💾 Usuario actualizado en DB local con ID: ${serverUser.id}');
+
+          await _saveUserSession(serverUser);
+          print('🔐 Sesión guardada para usuario: ${serverUser.id}');
+          return serverUser;
         } else if (response.statusCode == 404) {
-          print('⚠️ User with email $email not found on server');
+          print('⚠️ Usuario no encontrado en el servidor');
+          return null;
         } else {
-          print('⚠️ Login failed: ${response.statusCode} - ${response.body}');
+          final errorData = jsonDecode(response.body);
+          print(
+              '⚠️ Error en login: ${response.statusCode} - ${errorData['error']}');
+          return null;
         }
       } catch (e) {
-        print('API error during login: $e');
+        print('❌ Error en login: $e');
+        return null;
       }
     }
 
+    // Fallback a login local
+    print('📱 Intentando login local...');
     final result =
         await db.query('users', where: 'email = ?', whereArgs: [email]);
 
@@ -355,11 +382,13 @@ class UserRepositoryImpl implements UserRepository {
 
       if (storedHash == inputHash) {
         final user = User.fromMap(userData);
+        print('✅ Login local exitoso con ID: ${user.id}');
         await _saveUserSession(user);
         return user;
       }
     }
 
+    print('❌ Login fallido');
     return null;
   }
 
@@ -385,6 +414,7 @@ class UserRepositoryImpl implements UserRepository {
                 'email': user.email,
                 'bio': user.bio,
                 'is_admin': user.isAdmin,
+                'reported_for_name': user.reportedForName,
               }),
             )
             .timeout(apiTimeout);
@@ -401,6 +431,51 @@ class UserRepositoryImpl implements UserRepository {
         }
       } catch (e) {
         print('API error during updateUser: $e');
+      }
+      await _syncLocalData();
+    }
+  }
+
+  @override
+  Future<void> updateUserStatus(
+      String userId, String status, DateTime? nameChangeDeadline) async {
+    final db = await _database;
+    await db.update(
+      'users',
+      {
+        'status': status,
+        'name_change_deadline': nameChangeDeadline?.toIso8601String(),
+        'sync': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+
+    if (await _isOnline()) {
+      try {
+        final response = await http
+            .put(
+              Uri.parse('$apiUrl/updateUserStatus/$userId'),
+              headers: _headers(),
+              body: jsonEncode({
+                'status': status,
+                'name_change_deadline': nameChangeDeadline?.toIso8601String(),
+              }),
+            )
+            .timeout(apiTimeout);
+        if (response.statusCode == 200) {
+          await db.update(
+            'users',
+            {'sync': 1},
+            where: 'id = ?',
+            whereArgs: [userId],
+          );
+        } else {
+          print(
+              '⚠️ Failed to update user status for $userId: ${response.statusCode} - ${response.body}');
+        }
+      } catch (e) {
+        print('API error during updateUserStatus: $e');
       }
       await _syncLocalData();
     }
@@ -734,9 +809,11 @@ class UserRepositoryImpl implements UserRepository {
   }
 
   Future<void> _saveUserSession(User user) async {
+    print('💾 Guardando sesión para usuario: ${user.id}');
     await sharedPrefs.setValue('user_id', user.id);
     await sharedPrefs.setValue('username', user.username);
     await sharedPrefs.setValue('email', user.email);
+    print('✅ Sesión guardada correctamente');
   }
 
   @override

@@ -10,6 +10,9 @@ import 'package:books/application/bloc/comment/comment_event.dart';
 import 'package:books/application/bloc/comment/comment_state.dart';
 import 'package:books/application/bloc/user/user_bloc.dart';
 import 'package:books/application/bloc/user/user_state.dart';
+import 'package:books/application/bloc/report/report_bloc.dart';
+import 'package:books/application/bloc/report/report_event.dart';
+import 'package:books/domain/entities/interaction/report.dart';
 
 enum CommentMode { add, edit, reply }
 
@@ -152,32 +155,55 @@ class _CommentsModalState extends State<CommentsModal> {
         children: [
           ListTile(
             contentPadding: const EdgeInsets.only(left: 16.0, right: 8.0),
-            leading: CircleAvatar(
-              child: GestureDetector(
-                onTap: isAuthor
-                    ? null
-                    : () {
+            leading: GestureDetector(
+              onTap: isAuthor
+                  ? null
+                  : () async {
+                      final user = await context
+                          .read<UserBloc>()
+                          .userRepository
+                          .getUserById(comment.userId);
+                      if (user != null && mounted) {
                         Navigator.pushNamed(
                           context,
                           '/public_profile',
-                          arguments: {'userId': comment.userId},
+                          arguments: user,
                         );
-                      },
+                      }
+                    },
+              child: CircleAvatar(
                 child: Text(
                   comment.userId.substring(0, 1).toUpperCase(),
                   style: const TextStyle(fontSize: 14),
                 ),
               ),
             ),
-            title: FutureBuilder<String>(
-              future: _getUserName(comment.userId),
-              builder: (context, snapshot) {
-                return Text(
-                  snapshot.data ?? 'Usuario',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14),
-                );
-              },
+            title: GestureDetector(
+              onTap: isAuthor
+                  ? null
+                  : () async {
+                      final user = await context
+                          .read<UserBloc>()
+                          .userRepository
+                          .getUserById(comment.userId);
+                      if (user != null && mounted) {
+                        Navigator.pushNamed(
+                          context,
+                          '/public_profile',
+                          arguments: user,
+                        );
+                      }
+                    },
+              child: FutureBuilder<String>(
+                future: _getUserName(comment.userId),
+                builder: (context, snapshot) {
+                  return Text(
+                    snapshot.data ?? 'Usuario',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  );
+                },
+              ),
             ),
             subtitle: Text(
               prefixUsername != null
@@ -202,6 +228,8 @@ class _CommentsModalState extends State<CommentsModal> {
                     _targetCommentId = comment.id;
                     _commentController.clear();
                   });
+                } else if (value == 'reportar') {
+                  _showReportDialog(comment);
                 }
               },
               itemBuilder: (context) {
@@ -226,6 +254,10 @@ class _CommentsModalState extends State<CommentsModal> {
                       value: 'responder',
                       child: Text("Responder", style: TextStyle(fontSize: 12)),
                     ),
+                    const PopupMenuItem(
+                      value: 'reportar',
+                      child: Text("Reportar", style: TextStyle(fontSize: 12)),
+                    ),
                   ];
                 }
               },
@@ -249,6 +281,62 @@ class _CommentsModalState extends State<CommentsModal> {
                   ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReportDialog(Comment comment) {
+    final TextEditingController reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reportar comentario'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Por favor, describe el motivo del reporte:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Motivo del reporte...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final userState = context.read<UserBloc>().state;
+              if (userState is UserAuthenticated) {
+                final report = Report(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  reporterId: userState.user.id,
+                  targetId: comment.id,
+                  targetType: 'comment',
+                  reason: reasonController.text.trim(),
+                  status: 'pending',
+                  timestamp: DateTime.now(),
+                );
+                context.read<ReportBloc>().add(SubmitReport(report));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Reporte enviado correctamente'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Enviar'),
           ),
         ],
       ),

@@ -13,11 +13,15 @@ class UserLoading extends UserState {}
 
 class UserAuthenticated extends UserState {
   final User user;
+  final List<String> followedAuthors;
 
-  const UserAuthenticated({required this.user});
+  const UserAuthenticated({
+    required this.user,
+    this.followedAuthors = const [],
+  });
 
   @override
-  List<Object?> get props => [user];
+  List<Object?> get props => [user, followedAuthors];
 }
 
 class UserUnauthenticated extends UserState {}
@@ -43,4 +47,19 @@ class UserPasswordChanged extends UserState {
   const UserPasswordChanged({required this.user});
   @override
   List<Object?> get props => [user];
+}
+
+class UserFollowing extends UserState {
+  final String userId;
+  final String authorId;
+  final bool isFollowing;
+
+  const UserFollowing({
+    required this.userId,
+    required this.authorId,
+    required this.isFollowing,
+  });
+
+  @override
+  List<Object?> get props => [userId, authorId, isFollowing];
 }

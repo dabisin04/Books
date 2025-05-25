@@ -4,6 +4,8 @@ abstract class UserRepository {
   Future<void> registerUser(User user);
   Future<User?> loginUser(String email, String password);
   Future<void> updateUser(User user);
+  Future<void> updateUserStatus(
+      String userId, String status, DateTime? nameChangeDeadline);
   Future<void> changePassword(String userId, String newPassword);
   Future<User?> getUserById(String userId);
   Future<void> updateUserBio(String userId, String bio);

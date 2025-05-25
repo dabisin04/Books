@@ -61,3 +61,17 @@ class ChangePassword extends UserEvent {
 }
 
 class CheckUserSession extends UserEvent {}
+
+class FollowUser extends UserEvent {
+  final String userId;
+  final String authorId;
+
+  FollowUser({required this.userId, required this.authorId});
+}
+
+class UnfollowUser extends UserEvent {
+  final String userId;
+  final String authorId;
+
+  UnfollowUser({required this.userId, required this.authorId});
+}
