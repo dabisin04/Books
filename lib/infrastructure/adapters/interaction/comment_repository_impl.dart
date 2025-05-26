@@ -15,12 +15,247 @@ class CommentRepositoryImpl implements CommentRepository {
   Future<Database> get _database async =>
       await DatabaseHelper.instance.database;
   static const String cacheKey = 'cached_comments';
-  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String primaryApiUrl =
+      (dotenv.env['API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String altApiUrl =
+      (dotenv.env['ALT_API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
   );
 
   CommentRepositoryImpl(this.sharedPrefs);
+
+  Map<String, String> _headers({bool json = true}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'X-API-KEY': apiKey,
+    };
+  }
+
+  bool _isSuccessfulResponse(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
+  Future<http.Response> _get(String endpoint) async {
+    try {
+      final futures = [
+        http
+            .get(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+        http
+            .get(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, using alternative API response');
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in GET request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _post(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      print('📤 [POST] Enviando a Flask: $endpoint');
+      print('📦 Datos a Flask: ${jsonEncode(body)}');
+
+      final futures = [
+        http
+            .post(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          print('🔄 Intentando sincronizar con Flask...');
+          final syncResponse = await http
+              .post(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+          print(
+              '📥 Respuesta sincronización Flask: ${syncResponse.statusCode}');
+          print('📦 Cuerpo sincronización Flask: ${syncResponse.body}');
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in POST request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _put(String endpoint, Map<String, dynamic> body,
+      {Map<String, String> headers = const {}}) async {
+    try {
+      print('📤 [PUT] Enviando a Flask: $endpoint');
+      print('📦 Datos a Flask: ${jsonEncode(body)}');
+      print('📤 [PUT] Headers: ${{..._headers(), ...headers}}');
+
+      final allHeaders = {..._headers(), ...headers};
+
+      final futures = [
+        http
+            .put(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: allHeaders,
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .put(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: allHeaders,
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          print('🔄 Intentando sincronizar con Flask...');
+          final syncResponse = await http
+              .put(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: allHeaders,
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+          print(
+              '📥 Respuesta sincronización Flask: ${syncResponse.statusCode}');
+          print('📦 Cuerpo sincronización Flask: ${syncResponse.body}');
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in PUT request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _delete(
+      String endpoint, Map<String, String> headers) async {
+    try {
+      final allHeaders = {..._headers(), ...headers};
+      print('📤 [DELETE] Headers: $allHeaders');
+
+      final futures = [
+        http
+            .delete(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: allHeaders,
+            )
+            .timeout(apiTimeout),
+        http
+            .delete(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: allHeaders,
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          await http
+              .delete(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: allHeaders,
+              )
+              .timeout(apiTimeout);
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in DELETE request: $e');
+      rethrow;
+    }
+  }
 
   String? getCurrentUserId() {
     final id = sharedPrefs.getValue<String>('user_id');
@@ -41,31 +276,26 @@ class CommentRepositoryImpl implements CommentRepository {
     final db = await _database;
     final localComments = await db.query('comments');
     print('🔄 Comentarios locales a sincronizar: ${localComments.length}');
+
     for (var commentMap in localComments) {
       final comment = Comment.fromMap(commentMap);
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/commentsByBook/${comment.bookId}'));
-        final serverComments = jsonDecode(response.body) as List<dynamic>;
-        final exists = serverComments.any((c) => c['id'] == comment.id);
+        final response = await _get('commentsByBook/${comment.bookId}');
+        if (_isSuccessfulResponse(response.statusCode)) {
+          final serverComments = jsonDecode(response.body) as List<dynamic>;
+          final exists = serverComments.any((c) => c['id'] == comment.id);
 
-        if (!exists) {
-          print('📤 Enviando comentario nuevo: ${comment.id}');
-          await http.post(
-            Uri.parse('$baseUrl/addComment'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(comment.toMap()),
-          );
-        } else {
-          print('✏️ Actualizando comentario existente: ${comment.id}');
-          await http.put(
-            Uri.parse('$baseUrl/updateComment/${comment.id}'),
-            headers: {
-              'Content-Type': 'application/json',
-              'X-User-Id': comment.userId,
-            },
-            body: jsonEncode({'content': comment.content}),
-          );
+          if (!exists) {
+            print('📤 Enviando comentario nuevo: ${comment.id}');
+            await _post('addComment', comment.toMap());
+          } else {
+            print('✏️ Actualizando comentario existente: ${comment.id}');
+            await _put('updateComment/${comment.id}', {
+              'content': comment.content,
+            }, headers: {
+              'X-User-Id': comment.userId
+            });
+          }
         }
       } catch (e) {
         print('❌ Error sincronizando ${comment.id}: $e');
@@ -106,21 +336,48 @@ class CommentRepositoryImpl implements CommentRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$baseUrl/addComment'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(commentMap),
-        );
+        print('📤 Registrando comentario primero en Flask...');
+        final flaskResponse = await http
+            .post(
+              Uri.parse('$primaryApiUrl/addComment'),
+              headers: _headers(),
+              body: jsonEncode(commentMap),
+            )
+            .timeout(apiTimeout);
 
-        print(
-            '📥 Respuesta addComment: ${response.statusCode} - ${response.body}');
-
-        if (response.statusCode != 200) {
-          throw Exception('API rechazó el comentario: ${response.body}');
+        if (flaskResponse.statusCode < 200 || flaskResponse.statusCode >= 300) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
         }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Comentario creado en Flask con ID: ${flaskData["id"]}');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/addComment'),
+              headers: _headers(),
+              body: jsonEncode({
+                ...flaskData,
+                'from_flask': true,
+              }),
+            )
+            .timeout(apiTimeout);
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        final commentToInsert = Comment.fromMap(flaskData);
+        await db.insert('comments', commentToInsert.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+        print(
+            '💾 Comentario guardado en DB local con ID: ${commentToInsert.id}');
       } catch (e) {
-        print('❌ Error al enviar a la API. Guardando local: $e');
-        await db.insert('comments', commentMap);
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar el comentario: $e');
       }
     } else {
       print('💾 Guardando comentario offline.');
@@ -144,12 +401,7 @@ class CommentRepositoryImpl implements CommentRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.delete(
-          Uri.parse('$baseUrl/deleteComment/$commentId'),
-          headers: {'X-User-Id': currentUserId},
-        );
-        print(
-            '📥 Respuesta deleteComment: ${response.statusCode} - ${response.body}');
+        await _delete('deleteComment/$commentId', {'X-User-Id': currentUserId});
       } catch (e) {
         print('❌ API error: $e');
       }
@@ -163,11 +415,9 @@ class CommentRepositoryImpl implements CommentRepository {
 
     if (await _isOnline()) {
       try {
-        final response =
-            await http.get(Uri.parse('$baseUrl/commentsByBook/$bookId'));
-        print('📥 Comentarios obtenidos: ${response.statusCode}');
+        final response = await _get('commentsByBook/$bookId');
 
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final comments = data.map((map) => Comment.fromMap(map)).toList();
 
@@ -192,11 +442,9 @@ class CommentRepositoryImpl implements CommentRepository {
   Future<List<Comment>> fetchReplies(String commentId) async {
     if (await _isOnline()) {
       try {
-        final response =
-            await http.get(Uri.parse('$baseUrl/replies/$commentId'));
-        print('📥 Respuesta fetchReplies: ${response.statusCode}');
+        final response = await _get('replies/$commentId');
 
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final replies = data.map((map) => Comment.fromMap(map)).toList();
 
@@ -229,7 +477,7 @@ class CommentRepositoryImpl implements CommentRepository {
       throw Exception("Error: Usuario no autenticado.");
     }
 
-    print('✏️ Editando comentario $commentId');
+    print('✏️ Editando comentario $commentId por usuario $currentUserId');
 
     await db.update(
       'comments',
@@ -240,16 +488,11 @@ class CommentRepositoryImpl implements CommentRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/updateComment/$commentId'),
-          headers: {
-            'Content-Type': 'application/json',
-            'X-User-Id': currentUserId,
-          },
-          body: jsonEncode({'content': newContent}),
-        );
-        print(
-            '📥 Respuesta updateComment: ${response.statusCode} - ${response.body}');
+        await _put('updateComment/$commentId', {
+          'content': newContent,
+        }, headers: {
+          'X-User-Id': currentUserId
+        });
       } catch (e) {
         print('❌ API error updateComment: $e');
       }

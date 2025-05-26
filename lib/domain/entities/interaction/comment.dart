@@ -23,7 +23,8 @@ class Comment extends Equatable {
     String? rootCommentId,
     this.reports = 0,
   })  : id = id ?? _uuid.v4(),
-        rootCommentId = rootCommentId ?? parentCommentId ?? id ?? _uuid.v4();
+        rootCommentId =
+            rootCommentId ?? (parentCommentId != null ? parentCommentId : null);
 
   Comment copyWith({
     String? id,
@@ -47,7 +48,7 @@ class Comment extends Equatable {
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool fromFlask = false}) {
     return {
       'id': id,
       'user_id': userId,
@@ -57,19 +58,20 @@ class Comment extends Equatable {
       'parent_comment_id': parentCommentId,
       'root_comment_id': rootCommentId,
       'reports': reports,
+      if (fromFlask) 'from_flask': true,
     };
   }
 
   factory Comment.fromMap(Map<String, dynamic> map) {
     return Comment(
-      id: map['id'],
-      userId: map['user_id'],
-      bookId: map['book_id'],
-      content: map['content'],
-      timestamp: map['timestamp'],
-      parentCommentId: map['parent_comment_id'],
-      rootCommentId: map['root_comment_id'],
-      reports: map['reports'],
+      id: map['id']?.toString() ?? _uuid.v4(),
+      userId: map['user_id']?.toString() ?? '',
+      bookId: map['book_id']?.toString() ?? '',
+      content: map['content']?.toString() ?? '',
+      timestamp: map['timestamp']?.toString() ?? '',
+      parentCommentId: map['parent_comment_id']?.toString(),
+      rootCommentId: map['root_comment_id']?.toString(),
+      reports: (map['reports'] as num?)?.toInt() ?? 0,
     );
   }
 

@@ -16,7 +16,10 @@ class ReportRepositoryImpl implements ReportRepository {
   final Connectivity _connectivity = Connectivity();
   Future<Database> get _database async =>
       await DatabaseHelper.instance.database;
-  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String primaryApiUrl =
+      (dotenv.env['API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String altApiUrl =
+      (dotenv.env['ALT_API_BASE_URL'] ?? '').replaceAll('//api', '/api');
   static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
@@ -36,12 +39,194 @@ class ReportRepositoryImpl implements ReportRepository {
     return connectivityResult != ConnectivityResult.none;
   }
 
+  bool _isSuccessfulResponse(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
+  Future<http.Response> _get(String endpoint) async {
+    try {
+      print('📤 [GET] Enviando a Flask: $endpoint');
+      print('📦 Headers: ${_headers(json: false)}');
+
+      final futures = [
+        http
+            .get(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+        http
+            .get(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, using alternative API response');
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in GET request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _post(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      print('📤 [POST] Enviando a Flask: $endpoint');
+      print('📦 Datos a Flask: ${jsonEncode(body)}');
+      print('📦 Headers: ${_headers()}');
+
+      final futures = [
+        http
+            .post(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          print('🔄 Intentando sincronizar con Flask...');
+          final syncResponse = await http
+              .post(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+          print(
+              '📥 Respuesta sincronización Flask: ${syncResponse.statusCode}');
+          print('📦 Cuerpo sincronización Flask: ${syncResponse.body}');
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in POST request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _put(String endpoint, Map<String, dynamic> body) async {
+    try {
+      print('📤 [PUT] Enviando a Flask: $endpoint');
+      print('📦 Datos a Flask: ${jsonEncode(body)}');
+      print('📦 Headers: ${_headers()}');
+
+      final futures = [
+        http
+            .put(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .put(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          print('🔄 Intentando sincronizar con Flask...');
+          final syncResponse = await http
+              .put(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+          print(
+              '📥 Respuesta sincronización Flask: ${syncResponse.statusCode}');
+          print('📦 Cuerpo sincronización Flask: ${syncResponse.body}');
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in PUT request: $e');
+      rethrow;
+    }
+  }
+
   @override
   Future<void> reportContent(Report report) async {
+    print('📝 Iniciando reporte de contenido...');
+    print('📦 Datos del reporte: ${report.toMap()}');
+
     final db = await _database;
     await db.transaction((txn) async {
       await txn.insert('reports', report.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace);
+      print('💾 Reporte guardado en DB local');
     });
 
     if (await _isOnline()) {
@@ -54,32 +239,60 @@ class ReportRepositoryImpl implements ReportRepository {
           'status': report.status ?? 'pending',
         };
 
-        print('📤 Enviando reporte a API:');
-        print('URL: $baseUrl/addReport');
-        print('Headers: ${_headers()}');
-        print('Body: ${jsonEncode(requestBody)}');
+        print('📤 Registrando reporte primero en Flask...');
+        print('📦 Datos a Flask: ${jsonEncode(requestBody)}');
 
-        final response = await http
+        final flaskResponse = await http
             .post(
-              Uri.parse('$baseUrl/addReport'),
+              Uri.parse('$primaryApiUrl/addReport'),
               headers: _headers(),
               body: jsonEncode(requestBody),
             )
             .timeout(apiTimeout);
 
-        print('📥 Respuesta del API:');
-        print('Status Code: ${response.statusCode}');
-        print('Body: ${response.body}');
+        print('📥 Respuesta Flask: ${flaskResponse.statusCode}');
+        print('📦 Cuerpo Flask: ${flaskResponse.body}');
 
-        if (response.statusCode != 201) {
-          throw Exception(
-              'Error al reportar contenido: ${response.statusCode}');
+        if (flaskResponse.statusCode != 201) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
         }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Reporte creado en Flask');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiData = {
+          ...flaskData,
+          'from_flask': true,
+        };
+        print('📤 Enviando a FastAPI: ${jsonEncode(fastapiData)}');
+
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/addReport'),
+              headers: _headers(),
+              body: jsonEncode(fastapiData),
+            )
+            .timeout(apiTimeout);
+
+        print('📥 Respuesta FastAPI: ${fastapiResponse.statusCode}');
+        print('📦 Cuerpo FastAPI: ${fastapiResponse.body}');
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        print('✅ Reporte sincronizado con FastAPI');
       } on TimeoutException {
         print('⏰ Timeout al reportar contenido');
       } catch (e) {
-        print('❌ Error al enviar reporte a API: $e');
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar el reporte: $e');
       }
+    } else {
+      print('📴 Sin conexión. Reporte guardado solo localmente.');
     }
   }
 
@@ -126,33 +339,32 @@ class ReportRepositoryImpl implements ReportRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .put(
-              Uri.parse('$baseUrl/updateReportStatus/$reportId'),
-              headers: _headers(),
-              body: jsonEncode({
-                'status': status,
-                'admin_id': adminId,
-              }),
-            )
-            .timeout(apiTimeout);
-        if (response.statusCode != 200) {
+        final response = await _put('updateReportStatus/$reportId', {
+          'status': status,
+          'admin_id': adminId,
+        });
+
+        if (!_isSuccessfulResponse(response.statusCode)) {
           throw Exception('Error al actualizar estado: ${response.statusCode}');
         }
       } on TimeoutException {
-        print('Timeout al actualizar estado');
+        print('⏰ Timeout al actualizar estado');
       } catch (e) {
-        print('Error al actualizar estado en API: $e');
+        print('❌ Error al actualizar estado en APIs: $e');
       }
     }
   }
 
   @override
   Future<void> addStrike(Strike strike) async {
+    print('📝 Iniciando registro de strike...');
+    print('📦 Datos del strike: ${strike.toMap()}');
+
     final db = await _database;
     await db.transaction((txn) async {
       await txn.insert('user_strikes', strike.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace);
+      print('💾 Strike guardado en DB local');
     });
 
     if (await _isOnline()) {
@@ -164,31 +376,60 @@ class ReportRepositoryImpl implements ReportRepository {
           'is_active': strike.isActive,
         };
 
-        print('📤 Enviando strike a API:');
-        print('URL: $baseUrl/addStrike');
-        print('Headers: ${_headers()}');
-        print('Body: ${jsonEncode(requestBody)}');
+        print('📤 Registrando strike primero en Flask...');
+        print('📦 Datos a Flask: ${jsonEncode(requestBody)}');
 
-        final response = await http
+        final flaskResponse = await http
             .post(
-              Uri.parse('$baseUrl/addStrike'),
+              Uri.parse('$primaryApiUrl/addStrike'),
               headers: _headers(),
               body: jsonEncode(requestBody),
             )
             .timeout(apiTimeout);
 
-        print('📥 Respuesta del API:');
-        print('Status Code: ${response.statusCode}');
-        print('Body: ${response.body}');
+        print('📥 Respuesta Flask: ${flaskResponse.statusCode}');
+        print('📦 Cuerpo Flask: ${flaskResponse.body}');
 
-        if (response.statusCode != 201) {
-          throw Exception('Error al agregar strike: ${response.statusCode}');
+        if (flaskResponse.statusCode != 201) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
         }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Strike creado en Flask');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiData = {
+          ...flaskData,
+          'from_flask': true,
+        };
+        print('📤 Enviando a FastAPI: ${jsonEncode(fastapiData)}');
+
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/addStrike'),
+              headers: _headers(),
+              body: jsonEncode(fastapiData),
+            )
+            .timeout(apiTimeout);
+
+        print('📥 Respuesta FastAPI: ${fastapiResponse.statusCode}');
+        print('📦 Cuerpo FastAPI: ${fastapiResponse.body}');
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        print('✅ Strike sincronizado con FastAPI');
       } on TimeoutException {
         print('⏰ Timeout al agregar strike');
       } catch (e) {
-        print('❌ Error al enviar strike a API: $e');
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar el strike: $e');
       }
+    } else {
+      print('📴 Sin conexión. Strike guardado solo localmente.');
     }
   }
 
@@ -206,10 +447,14 @@ class ReportRepositoryImpl implements ReportRepository {
 
   @override
   Future<void> addAlert(Alert alert) async {
+    print('📝 Iniciando registro de alerta...');
+    print('📦 Datos de la alerta: ${alert.toMap()}');
+
     final db = await _database;
     await db.transaction((txn) async {
       await txn.insert('report_alerts', alert.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace);
+      print('💾 Alerta guardada en DB local');
     });
 
     if (await _isOnline()) {
@@ -221,31 +466,60 @@ class ReportRepositoryImpl implements ReportRepository {
           'created_at': alert.createdAt.toIso8601String(),
         };
 
-        print('📤 Enviando alerta a API:');
-        print('URL: $baseUrl/addAlert');
-        print('Headers: ${_headers()}');
-        print('Body: ${jsonEncode(requestBody)}');
+        print('📤 Registrando alerta primero en Flask...');
+        print('📦 Datos a Flask: ${jsonEncode(requestBody)}');
 
-        final response = await http
+        final flaskResponse = await http
             .post(
-              Uri.parse('$baseUrl/addAlert'),
+              Uri.parse('$primaryApiUrl/addAlert'),
               headers: _headers(),
               body: jsonEncode(requestBody),
             )
             .timeout(apiTimeout);
 
-        print('📥 Respuesta del API:');
-        print('Status Code: ${response.statusCode}');
-        print('Body: ${response.body}');
+        print('📥 Respuesta Flask: ${flaskResponse.statusCode}');
+        print('📦 Cuerpo Flask: ${flaskResponse.body}');
 
-        if (response.statusCode != 201) {
-          throw Exception('Error al agregar alerta: ${response.statusCode}');
+        if (flaskResponse.statusCode != 201) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
         }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Alerta creada en Flask');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiData = {
+          ...flaskData,
+          'from_flask': true,
+        };
+        print('📤 Enviando a FastAPI: ${jsonEncode(fastapiData)}');
+
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/addAlert'),
+              headers: _headers(),
+              body: jsonEncode(fastapiData),
+            )
+            .timeout(apiTimeout);
+
+        print('📥 Respuesta FastAPI: ${fastapiResponse.statusCode}');
+        print('📦 Cuerpo FastAPI: ${fastapiResponse.body}');
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        print('✅ Alerta sincronizada con FastAPI');
       } on TimeoutException {
         print('⏰ Timeout al agregar alerta');
       } catch (e) {
-        print('❌ Error al enviar alerta a API: $e');
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar la alerta: $e');
       }
+    } else {
+      print('📴 Sin conexión. Alerta guardada solo localmente.');
     }
   }
 
@@ -278,20 +552,16 @@ class ReportRepositoryImpl implements ReportRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .put(
-              Uri.parse('$baseUrl/resolveAlert/$alertId'),
-              headers: _headers(),
-              body: jsonEncode({'status': status}),
-            )
-            .timeout(apiTimeout);
-        if (response.statusCode != 200) {
+        final response =
+            await _put('resolveAlert/$alertId', {'status': status});
+
+        if (!_isSuccessfulResponse(response.statusCode)) {
           throw Exception('Error al resolver alerta: ${response.statusCode}');
         }
       } on TimeoutException {
-        print('Timeout al resolver alerta');
+        print('⏰ Timeout al resolver alerta');
       } catch (e) {
-        print('Error al resolver alerta en API: $e');
+        print('❌ Error al resolver alerta en APIs: $e');
       }
     }
   }

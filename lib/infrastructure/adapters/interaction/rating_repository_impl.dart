@@ -17,7 +17,10 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
   static const String cacheKey = 'cached_ratings';
   static const String lastSyncKey = 'last_sync_ratings_timestamp';
   static const int cacheValidityMinutes = 5;
-  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String primaryApiUrl =
+      (dotenv.env['API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String altApiUrl =
+      (dotenv.env['ALT_API_BASE_URL'] ?? '').replaceAll('//api', '/api');
   static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
@@ -33,6 +36,191 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
       'Accept': 'application/json',
       'X-API-KEY': apiKey,
     };
+  }
+
+  bool _isSuccessfulResponse(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
+  Future<http.Response> _get(String endpoint) async {
+    try {
+      print('📤 [GET] Enviando a Flask: $endpoint');
+      print('📦 Headers: ${_headers(json: false)}');
+
+      final futures = [
+        http
+            .get(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+        http
+            .get(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, using alternative API response');
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in GET request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _post(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      print('📤 [POST] Enviando a Flask: $endpoint');
+      print('📦 Datos a Flask: ${jsonEncode(body)}');
+      print('📦 Headers: ${_headers()}');
+
+      final futures = [
+        http
+            .post(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      print('📥 Respuesta Flask: ${primaryResponse.statusCode}');
+      print('📦 Cuerpo Flask: ${primaryResponse.body}');
+      print('📥 Respuesta FastAPI: ${altResponse.statusCode}');
+      print('📦 Cuerpo FastAPI: ${altResponse.body}');
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          print('🔄 Intentando sincronizar con Flask...');
+          final syncResponse = await http
+              .post(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+          print(
+              '📥 Respuesta sincronización Flask: ${syncResponse.statusCode}');
+          print('📦 Cuerpo sincronización Flask: ${syncResponse.body}');
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in POST request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _delete(String endpointWithParams) async {
+    try {
+      final uriPrimary = Uri.parse('$primaryApiUrl/$endpointWithParams');
+      final uriAlt = Uri.parse('$altApiUrl/$endpointWithParams');
+
+      final futures = [
+        http.delete(uriPrimary, headers: _headers()),
+        http.delete(uriAlt, headers: _headers()),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, using alternative API');
+        // Intentar sincronizar con la primaria después
+        try {
+          await http.delete(uriPrimary, headers: _headers());
+        } catch (syncError) {
+          print('⚠️ Falló sincronización con primaria: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in DELETE request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _deleteWithBody(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      final futures = [
+        http
+            .delete(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .delete(
+              Uri.parse(
+                  '$altApiUrl/$endpoint?user_id=${body['user_id']}&book_id=${body['book_id']}'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primary = responses[0];
+      final alt = responses[1];
+
+      if (_isSuccessfulResponse(primary.statusCode)) return primary;
+      if (_isSuccessfulResponse(alt.statusCode)) return alt;
+
+      throw Exception('Both APIs failed: ${primary.statusCode}');
+    } catch (e) {
+      print('❌ Error in DELETE request: $e');
+      rethrow;
+    }
   }
 
   Future<bool> _isOnline() async {
@@ -81,21 +269,14 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
     String timestamp,
   ) async {
     try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/rateBook'),
-            headers: _headers(),
-            body: jsonEncode({
-              'user_id': userId,
-              'book_id': bookId,
-              'rating': rating,
-              'timestamp': timestamp,
-            }),
-          )
-          .timeout(apiTimeout);
+      final response = await _post('rateBook', {
+        'user_id': userId,
+        'book_id': bookId,
+        'rating': rating,
+        'timestamp': timestamp,
+      });
 
-      print('[📤] POST /rateBook → ${response.statusCode}');
-      if (response.statusCode == 200) {
+      if (_isSuccessfulResponse(response.statusCode)) {
         final db = await _db;
         await db.update(
           'book_ratings',
@@ -175,7 +356,51 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
 
     await _cacheRatings();
     if (await _isOnline()) {
-      await _syncWithApi(userId, bookId, rating, timestampStr);
+      try {
+        print('📤 Registrando rating primero en Flask...');
+        final flaskResponse = await http
+            .post(
+              Uri.parse('$primaryApiUrl/rateBook'),
+              headers: _headers(),
+              body: jsonEncode({
+                'user_id': userId,
+                'book_id': bookId,
+                'rating': rating,
+                'timestamp': timestampStr,
+              }),
+            )
+            .timeout(apiTimeout);
+
+        if (flaskResponse.statusCode != 201) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
+        }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Rating creado en Flask');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/rateBook'),
+              headers: _headers(),
+              body: jsonEncode({
+                ...flaskData,
+                'from_flask': true,
+              }),
+            )
+            .timeout(apiTimeout);
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        print('✅ Rating sincronizado con FastAPI');
+      } catch (e) {
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar el rating: $e');
+      }
     } else {
       _scheduleSync();
     }
@@ -208,16 +433,10 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(
-              Uri.parse(
-                  '$baseUrl/getUserRating?user_id=$userId&book_id=$bookId'),
-              headers: _headers(json: false),
-            )
-            .timeout(apiTimeout);
+        final response =
+            await _get('getUserRating?user_id=$userId&book_id=$bookId');
 
-        print('[📥] GET /getUserRating → ${response.statusCode}');
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final data = jsonDecode(response.body);
           final rating = data['rating'] as num?;
           if (rating != null) {
@@ -288,15 +507,9 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(
-              Uri.parse('$baseUrl/getGlobalAverage/$bookId'),
-              headers: _headers(json: false),
-            )
-            .timeout(apiTimeout);
+        final response = await _get('getGlobalAverage/$bookId');
 
-        print('[📥] GET /getGlobalAverage → ${response.statusCode}');
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final data = jsonDecode(response.body);
           final average = (data['average'] as num).toDouble();
           final count = (data['count'] as num).toInt();
@@ -356,15 +569,9 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(
-              Uri.parse('$baseUrl/getRatingDistribution/$bookId'),
-              headers: _headers(json: false),
-            )
-            .timeout(apiTimeout);
+        final response = await _get('getRatingDistribution/$bookId');
 
-        print('[📥] GET /getRatingDistribution → ${response.statusCode}');
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           final dist = {
             for (var i = 1; i <= 5; i++) i: (data[i.toString()] as num).toInt(),
@@ -408,6 +615,8 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
     required String bookId,
   }) async {
     final db = await _db;
+
+    // 🔸 Eliminar rating localmente
     await db.transaction((txn) async {
       await txn.delete(
         'book_ratings',
@@ -430,19 +639,19 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
       );
     });
 
-    print('[🗑️] Rating eliminado localmente. Sincronizando con API...');
+    print('[🗑️] Rating eliminado localmente. Sincronizando con APIs...');
 
+    // 🔸 Eliminar en APIs si hay conexión
     if (await _isOnline()) {
       try {
-        final response = await http
-            .delete(
-              Uri.parse('$baseUrl/deleteRating'),
-              headers: _headers(),
-              body: jsonEncode({'user_id': userId, 'book_id': bookId}),
-            )
-            .timeout(apiTimeout);
-        print('[📤] DELETE /deleteRating → ${response.statusCode}');
-        if (response.statusCode != 200) {
+        final body = {
+          'user_id': userId,
+          'book_id': bookId,
+        };
+
+        final response = await _deleteWithBody('deleteRating', body);
+
+        if (!_isSuccessfulResponse(response.statusCode)) {
           print('[❌] Error API: ${response.statusCode} - ${response.body}');
         }
       } catch (e) {
@@ -485,16 +694,10 @@ class BookRatingRepositoryImpl implements BookRatingRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(
-              Uri.parse(
-                  '$baseUrl/getUserRatings?book_id=$bookId&page=$page&limit=$limit'),
-              headers: _headers(json: false),
-            )
-            .timeout(apiTimeout);
+        final response = await _get(
+            'getUserRatings?book_id=$bookId&page=$page&limit=$limit');
 
-        print('[📥] GET /getUserRatings → ${response.statusCode}');
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final data = jsonDecode(response.body);
           if (data is List) {
             final ratings =

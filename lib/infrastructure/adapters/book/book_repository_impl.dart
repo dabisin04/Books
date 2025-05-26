@@ -16,12 +16,15 @@ class BookRepositoryImpl implements BookRepository {
       await DatabaseHelper.instance.database;
   static const String cacheKey = 'cached_books';
   static const String lastSyncKey = 'last_sync_timestamp';
-  static String baseUrl = dotenv.env['API_BASE_URL'] ?? '';
+  static String primaryApiUrl =
+      (dotenv.env['API_BASE_URL'] ?? '').replaceAll('//api', '/api');
+  static String altApiUrl =
+      (dotenv.env['ALT_API_BASE_URL'] ?? '').replaceAll('//api', '/api');
   static String apiKey = dotenv.env['API_KEY'] ?? '';
   static final Duration apiTimeout = Duration(
     seconds: int.tryParse(dotenv.env['API_TIMEOUT'] ?? '5') ?? 5,
   );
-  static const int cacheValidityMinutes = 30; // Aumentado a 30 minutos
+  static const int cacheValidityMinutes = 30;
 
   BookRepositoryImpl(this.sharedPrefs);
 
@@ -30,6 +33,198 @@ class BookRepositoryImpl implements BookRepository {
       if (json) 'Content-Type': 'application/json',
       'X-API-KEY': apiKey,
     };
+  }
+
+  bool _isSuccessfulResponse(int statusCode) {
+    return statusCode >= 200 && statusCode < 300;
+  }
+
+  Future<http.Response> _get(String endpoint) async {
+    try {
+      final futures = [
+        http
+            .get(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+        http
+            .get(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(json: false),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, using alternative API response');
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in GET request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _post(
+      String endpoint, Map<String, dynamic> body) async {
+    try {
+      final futures = [
+        http
+            .post(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .post(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          await http
+              .post(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in POST request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _put(String endpoint, Map<String, dynamic> body) async {
+    try {
+      final futures = [
+        http
+            .put(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+        http
+            .put(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+              body: jsonEncode(body),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          await http
+              .put(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+                body: jsonEncode(body),
+              )
+              .timeout(apiTimeout);
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in PUT request: $e');
+      rethrow;
+    }
+  }
+
+  Future<http.Response> _delete(String endpoint) async {
+    try {
+      final futures = [
+        http
+            .delete(
+              Uri.parse('$primaryApiUrl/$endpoint'),
+              headers: _headers(),
+            )
+            .timeout(apiTimeout),
+        http
+            .delete(
+              Uri.parse('$altApiUrl/$endpoint'),
+              headers: _headers(),
+            )
+            .timeout(apiTimeout),
+      ];
+
+      final responses = await Future.wait(futures);
+      final primaryResponse = responses[0];
+      final altResponse = responses[1];
+
+      if (_isSuccessfulResponse(primaryResponse.statusCode) &&
+          _isSuccessfulResponse(altResponse.statusCode)) {
+        return primaryResponse;
+      }
+
+      if (_isSuccessfulResponse(altResponse.statusCode)) {
+        print('⚠️ Primary API failed, syncing with alternative API');
+        try {
+          await http
+              .delete(
+                Uri.parse('$primaryApiUrl/$endpoint'),
+                headers: _headers(),
+              )
+              .timeout(apiTimeout);
+        } catch (syncError) {
+          print('⚠️ Failed to sync with primary API: $syncError');
+        }
+        return altResponse;
+      }
+
+      throw Exception('Both APIs failed: ${primaryResponse.statusCode}');
+    } catch (e) {
+      print('❌ Error in DELETE request: $e');
+      rethrow;
+    }
   }
 
   Future<bool> _isOnline() async {
@@ -53,30 +248,18 @@ class BookRepositoryImpl implements BookRepository {
     for (var bookMap in localBooks) {
       final book = Book.fromMap(bookMap);
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/book/${book.id}'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
+        final response = await _get('book/${book.id}');
         if (response.statusCode == 404) {
-          await http.post(
-            Uri.parse('$baseUrl/addBook'),
-            headers: _headers(),
-            body: jsonEncode(book.toMap()),
-          );
-        } else if (response.statusCode == 200) {
-          await http.put(
-            Uri.parse('$baseUrl/updateBookDetails/${book.id}'),
-            headers: _headers(),
-            body: jsonEncode({
-              'title': book.title,
-              'description': book.description,
-              'additional_genres': book.additionalGenres.isNotEmpty
-                  ? book.additionalGenres
-                  : null,
-              'genre': book.genre,
-              'content_type': book.contentType,
-            }),
-          );
+          await _post('addBook', book.toMap());
+        } else if (_isSuccessfulResponse(response.statusCode)) {
+          await _put('updateBookDetails/${book.id}', {
+            'title': book.title,
+            'description': book.description,
+            'additional_genres':
+                book.additionalGenres.isNotEmpty ? book.additionalGenres : null,
+            'genre': book.genre,
+            'content_type': book.contentType,
+          });
         }
       } catch (e) {
         print('Sync error for book ${book.id}: $e');
@@ -114,29 +297,75 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final checkResponse = await http
-            .get(Uri.parse('$baseUrl/book/$bookId'),
-                headers: _headers(json: false))
+        print('📤 Registrando libro primero en Flask...');
+        final flaskResponse = await http
+            .post(
+              Uri.parse('$primaryApiUrl/addBook'),
+              headers: _headers(),
+              body: jsonEncode(newBook.toMap()),
+            )
             .timeout(apiTimeout);
 
-        if (checkResponse.statusCode == 404) {
-          final response = await http.post(
-            Uri.parse('$baseUrl/addBook'),
-            headers: _headers(),
-            body: jsonEncode(newBook.toMap()),
-          );
-
-          if (response.statusCode == 409) {
-            print("⚠️ El libro con ID $bookId ya existe en la API.");
-          } else if (response.statusCode != 201) {
-            throw Exception(
-                'Error al agregar el libro: ${response.statusCode} - ${response.body}');
-          }
-        } else {
-          print("⚠️ El libro con ID $bookId ya existe en la API.");
+        if (flaskResponse.statusCode != 201) {
+          final error = jsonDecode(flaskResponse.body);
+          throw Exception(error['error'] ?? 'Error al registrar en Flask');
         }
+
+        final flaskData = jsonDecode(flaskResponse.body);
+        print('✅ Libro creado en Flask con ID: ${flaskData["id"]}');
+
+        // Ahora registrar en FastAPI incluyendo `from_flask = true`
+        final fastapiData = {
+          ...flaskData,
+          'from_flask': true,
+        };
+
+        // 🔧 Correcciones necesarias para FastAPI
+        final additionalGenres = fastapiData['additional_genres'];
+        if (additionalGenres is String) {
+          try {
+            fastapiData['additional_genres'] = jsonDecode(additionalGenres);
+          } catch (_) {
+            fastapiData['additional_genres'] = [];
+          }
+        }
+
+        final content = fastapiData['content'];
+        if (content is String) {
+          try {
+            fastapiData['content'] = jsonDecode(content);
+          } catch (_) {
+            fastapiData['content'] = {};
+          }
+        }
+
+        if (fastapiData['publication_date'] == "" ||
+            fastapiData['publication_date'] == "null") {
+          fastapiData['publication_date'] = null;
+        }
+
+        print('📤 Enviando a FastAPI desde Flask: ${jsonEncode(fastapiData)}');
+
+        final fastapiResponse = await http
+            .post(
+              Uri.parse('$altApiUrl/addBook'),
+              headers: _headers(),
+              body: jsonEncode(fastapiData),
+            )
+            .timeout(apiTimeout);
+
+        if (fastapiResponse.statusCode != 200) {
+          throw Exception(
+              'Error al registrar en FastAPI: ${fastapiResponse.statusCode}');
+        }
+
+        final bookToInsert = Book.fromMap(flaskData);
+        await db.insert('books', bookToInsert.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+        print('💾 Libro guardado en DB local con ID: ${bookToInsert.id}');
       } catch (e) {
-        print("🌐 Error al enviar libro a API. Guardado localmente. Error: $e");
+        print('❌ Error completo en registro dual: $e');
+        throw Exception('Error al registrar el libro: $e');
       }
     } else {
       print("📴 Sin conexión. Guardando localmente.");
@@ -156,13 +385,7 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.delete(
-          Uri.parse('$baseUrl/deleteBook/$bookId'),
-          headers: _headers(json: false),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to delete book from API: ${response.statusCode}');
+        await _delete('deleteBook/$bookId');
       } catch (e) {
         print('API error during deleteBook: $e');
       }
@@ -187,13 +410,7 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/trashBook/$bookId'),
-          headers: _headers(json: false),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to trash book via API: ${response.statusCode}');
+        await _put('trashBook/$bookId', {});
       } catch (e) {
         print('API error during trashBook: $e');
       }
@@ -218,13 +435,7 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/restoreBook/$bookId'),
-          headers: _headers(json: false),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to restore book via API: ${response.statusCode}');
+        await _put('restoreBook/$bookId', {});
       } catch (e) {
         print('API error during restoreBook: $e');
       }
@@ -257,7 +468,6 @@ class BookRepositoryImpl implements BookRepository {
           print('📚 Libros en caché: ${books.length}');
           print('📚 Libros filtrados: ${filteredBooks.length}');
 
-          // Aplicar filtro si se proporciona
           if (filter != null && filter.isNotEmpty) {
             filteredBooks = filteredBooks
                 .where((book) =>
@@ -266,7 +476,6 @@ class BookRepositoryImpl implements BookRepository {
             print('🔍 Libros después de filtro: ${filteredBooks.length}');
           }
 
-          // Aplicar ordenamiento si se proporciona
           if (sortBy != null) {
             switch (sortBy.toLowerCase()) {
               case 'title':
@@ -306,13 +515,10 @@ class BookRepositoryImpl implements BookRepository {
     if (await _isOnline()) {
       try {
         print('📡 Intentando obtener libros desde API');
-        final response = await http
-            .get(Uri.parse('$baseUrl/books?trashed=$trashed'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
+        final response = await _get('books?trashed=$trashed');
         print('📡 API response status: ${response.statusCode}');
 
-        if (response.statusCode == 200) {
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> decodedData = jsonDecode(response.body);
           books = decodedData.map((map) => Book.fromMap(map)).toList();
           print('📚 Libros obtenidos de API: ${books.length}');
@@ -339,7 +545,6 @@ class BookRepositoryImpl implements BookRepository {
       print('📴 Sin conexión, usando base de datos local');
     }
 
-    // Fallback a SQLite
     String whereClause = 'is_trashed = ?';
     List<dynamic> whereArgs = [trashed ? 1 : 0];
 
@@ -387,11 +592,8 @@ class BookRepositoryImpl implements BookRepository {
   Future<Book?> getBookById(String bookId) async {
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/book/$bookId'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
-        if (response.statusCode == 200) {
+        final response = await _get('book/$bookId');
+        if (_isSuccessfulResponse(response.statusCode)) {
           final book = Book.fromMap(jsonDecode(response.body));
           final db = await _database;
           await db.insert('books', book.toMap(),
@@ -425,13 +627,7 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/updateViews/$bookId'),
-          headers: _headers(json: false),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to update views via API: ${response.statusCode}');
+        await _put('updateViews/$bookId', {});
       } catch (e) {
         print('API error during updateBookViews: $e');
       }
@@ -469,15 +665,11 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.post(
-          Uri.parse('$baseUrl/rateBook'),
-          headers: _headers(),
-          body: jsonEncode(
-              {'book_id': bookId, 'user_id': userId, 'rating': rating}),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to rate book via API: ${response.statusCode}');
+        await _post('rateBook', {
+          'book_id': bookId,
+          'user_id': userId,
+          'rating': rating,
+        });
       } catch (e) {
         print('API error during rateBook: $e');
       }
@@ -491,11 +683,8 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> searchBooks(String query) async {
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/searchBooks?query=$query'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
-        if (response.statusCode == 200) {
+        final response = await _get('searchBooks?query=$query');
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
@@ -525,11 +714,8 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getBooksByAuthor(String authorId) async {
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/booksByAuthor/$authorId'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
-        if (response.statusCode == 200) {
+        final response = await _get('booksByAuthor/$authorId');
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
@@ -559,11 +745,8 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getTopRatedBooks() async {
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/topRatedBooks'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
-        if (response.statusCode == 200) {
+        final response = await _get('topRatedBooks');
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
@@ -593,11 +776,8 @@ class BookRepositoryImpl implements BookRepository {
   Future<List<Book>> getMostViewedBooks() async {
     if (await _isOnline()) {
       try {
-        final response = await http
-            .get(Uri.parse('$baseUrl/mostViewedBooks'),
-                headers: _headers(json: false))
-            .timeout(apiTimeout);
-        if (response.statusCode == 200) {
+        final response = await _get('mostViewedBooks');
+        if (_isSuccessfulResponse(response.statusCode)) {
           final List<dynamic> data = jsonDecode(response.body);
           final books = data.map((map) => Book.fromMap(map)).toList();
           final db = await _database;
@@ -634,14 +814,7 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/updateBookContent/$bookId'),
-          headers: _headers(),
-          body: jsonEncode({'content': content}),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to update content via API: ${response.statusCode}');
+        await _put('updateBookContent/$bookId', {'content': content});
       } catch (e) {
         print('API error during updateBookContent: $e');
       }
@@ -662,14 +835,9 @@ class BookRepositoryImpl implements BookRepository {
 
     if (await _isOnline()) {
       try {
-        final response = await http.put(
-          Uri.parse('$baseUrl/updatePublicationDate/$bookId'),
-          headers: _headers(),
-          body: jsonEncode({'publication_date': publicationDate}),
-        );
-        if (response.statusCode != 200)
-          throw Exception(
-              'Failed to update publication date via API: ${response.statusCode}');
+        await _put('updatePublicationDate/$bookId', {
+          'publication_date': publicationDate,
+        });
       } catch (e) {
         print('API error during updateBookPublicationDate: $e');
       }
@@ -688,38 +856,67 @@ class BookRepositoryImpl implements BookRepository {
     String? genre,
     String? contentType,
   }) async {
-    final values = <String, dynamic>{};
-    if (title != null) values['title'] = title;
-    if (description != null) values['description'] = description;
-    if (additionalGenres != null)
-      values['additional_genres'] = jsonEncode(additionalGenres);
-    if (genre != null) values['genre'] = genre;
-    if (contentType != null) values['content_type'] = contentType;
+    // 🔹 Payload que se envía a SQLite y también se usa en API
+    final Map<String, dynamic> values = {};
+
+    // 🔹 Payload que se enviará a FastAPI
+    final Map<String, dynamic> apiPayload = {};
+
+    if (title != null) {
+      values['title'] = title;
+      apiPayload['title'] = title;
+    }
+
+    if (description != null) {
+      values['description'] = description;
+      apiPayload['description'] = description;
+    }
+
+    if (additionalGenres != null) {
+      values['additional_genres'] =
+          jsonEncode(additionalGenres); // SQLite solo acepta String
+      apiPayload['additional_genres'] =
+          additionalGenres; // FastAPI espera List<String>
+    }
+
+    if (genre != null) {
+      values['genre'] = genre;
+      apiPayload['genre'] = genre;
+    }
+
+    if (contentType != null) {
+      values['content_type'] = contentType;
+      apiPayload['content_type'] = contentType;
+    }
+
+    // 🔎 Logs útiles
+    print('📦 Payload para SQLite:');
+    values.forEach((k, v) => print('  ├── $k: $v (${v.runtimeType})'));
+
+    print('📤 Payload a enviar a FastAPI:');
+    apiPayload.forEach((k, v) => print('  ├── $k: $v (${v.runtimeType})'));
 
     if (values.isNotEmpty) {
       final db = await _database;
+
       await db.transaction((txn) async {
         await txn.update('books', values, where: 'id = ?', whereArgs: [bookId]);
       });
 
       if (await _isOnline()) {
         try {
-          final response = await http.put(
-            Uri.parse('$baseUrl/updateBookDetails/$bookId'),
-            headers: _headers(),
-            body: jsonEncode(values),
-          );
-          if (response.statusCode != 200)
-            throw Exception(
-                'Failed to update book details via API: ${response.statusCode}');
+          final encoded = jsonEncode(apiPayload);
+          print('📡 Enviando PUT a /updateBookDetails/$bookId: $encoded');
+
+          await _put('updateBookDetails/$bookId', apiPayload);
         } catch (e) {
-          print('API error during updateBookDetails: $e');
+          print('❌ API error during updateBookDetails: $e');
         }
       }
 
       await _cacheBooks();
       _scheduleSync();
-      print('✏️ [Repository] updateBookDetails($bookId) -> $values');
+      print('✅ [Repository] updateBookDetails($bookId) -> $apiPayload');
     }
   }
 
@@ -734,10 +931,8 @@ class BookRepositoryImpl implements BookRepository {
 
   Future<void> testConnection() async {
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/books'), headers: _headers(json: false))
-          .timeout(const Duration(seconds: 5));
-      if (response.statusCode == 200) {
+      final response = await _get('books');
+      if (_isSuccessfulResponse(response.statusCode)) {
         print('✅ Conexión con backend exitosa: ${response.body}');
       } else {
         print(
